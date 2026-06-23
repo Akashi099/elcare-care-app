@@ -6,6 +6,7 @@ import routes from './api/routes.js';
 import { startPolling } from './poller.js';
 import { rateLimiter } from './api/rate-limit-middleware.js';
 import { metricsMiddleware, handleMetrics } from './metrics.js';
+import prisma from './db.js';
 
 dotenv.config();
 
@@ -56,7 +57,7 @@ app.get('/health', (req: express.Request, res: express.Response) => {
 // Use this for Kubernetes readinessProbe / Docker HEALTHCHECK so traffic is only
 // routed once the indexer is actually synced and serving real data.
 app.get('/readyz', async (req: express.Request, res: express.Response) => {
-    const state = await import('./db.js').then(m => m.default.syncState.findUnique({ where: { id: 1 } }));
+    const state = await prisma.syncState.findUnique({ where: { id: 1 } });
     if (state && state.lastLedger > 0) {
         res.json({ status: 'ready', lastLedger: state.lastLedger });
     } else {
