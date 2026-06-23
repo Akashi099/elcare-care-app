@@ -1,4 +1,4 @@
-// ─────────────────────────────────────────────────────────────
+﻿// ─────────────────────────────────────────────────────────────
 // hooks/useAdmin.ts — Administrative hooks for stats + moderation
 // ─────────────────────────────────────────────────────────────
 
@@ -35,6 +35,7 @@ export function useAdminStats() {
     const [error, setError] = useState<string | null>(null);
 
     const refresh = useCallback(async () => {
+    if (!config.contractId) return;
         setIsLoading(true);
         setError(null);
         try {
