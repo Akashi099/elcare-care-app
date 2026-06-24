@@ -1,6 +1,6 @@
 ﻿// -------------------------------------------------------------
-// lib/lobstr.ts — Lobstr browser wallet helpers
-// Uses @lobstrco/signer-extension-api (mirrors Freighter's API shape)
+// lib/lobstr.ts - Lobstr browser wallet helpers
+// Uses @lobstrco/signer-extension-api v2
 // Dynamic imports used to prevent SSR crashes in Next.js
 // -------------------------------------------------------------
 
@@ -19,12 +19,7 @@ export async function isLobstrInstalled(): Promise<boolean> {
   if (typeof window === "undefined") return false;
   try {
     const { isConnected } = await getLobstrApi();
-    const result = await isConnected();
-    if (typeof result === "boolean") return result;
-    if (result && typeof (result as any).isConnected === "boolean") {
-      return (result as any).isConnected;
-    }
-    return !!result;
+    return await isConnected();
   } catch {
     return false;
   }
@@ -32,40 +27,28 @@ export async function isLobstrInstalled(): Promise<boolean> {
 
 /**
  * Requests access to Lobstr and returns the public key.
+ * v2 API: just call getPublicKey() directly - the extension handles permission prompts.
  */
 export async function connectLobstr(): Promise<LobstrAccount> {
-  const { setAllowed, getPublicKey } = await getLobstrApi();
-  const allowed = await setAllowed();
-  const isAllowedResult =
-    typeof allowed === "boolean" ? allowed : (allowed as any)?.isAllowed;
-
-  if (!isAllowedResult) {
-    throw new Error("Lobstr access was denied by the user.");
-  }
-
-  const result = await getPublicKey();
-  const publicKey = typeof result === "string" ? result : (result as any)?.publicKey;
-
-  if (!publicKey) {
+  const { getPublicKey } = await getLobstrApi();
+  const publicKey = await getPublicKey();
+  if (!publicKey || typeof publicKey !== "string") {
     throw new Error("Failed to get public key from Lobstr.");
   }
-
   return { publicKey };
 }
 
 /**
  * Asks Lobstr to sign a transaction XDR string.
+ * v2 API: signTransaction only takes the XDR, no options object.
  */
-export async function signWithLobstr(
-  txXdr: string,
-  networkPassphrase: string
-): Promise<string> {
+export async function signWithLobstr(txXdr: string): Promise<string> {
   const { signTransaction } = await getLobstrApi();
-  const result = await signTransaction(txXdr, { networkPassphrase });
-  if (typeof result === "string") return result;
-  if (result && (result as any).signedTxXdr) return (result as any).signedTxXdr;
-  const error = (result as any)?.error;
-  throw new Error(error ?? "Failed to sign transaction with Lobstr.");
+  const result = await signTransaction(txXdr);
+  if (!result || typeof result !== "string") {
+    throw new Error("Failed to sign transaction with Lobstr.");
+  }
+  return result;
 }
 
 /**
@@ -76,10 +59,8 @@ export async function getLobstrPublicKey(): Promise<string | null> {
     const installed = await isLobstrInstalled();
     if (!installed) return null;
     const { getPublicKey } = await getLobstrApi();
-    const result = await getPublicKey();
-    if (typeof result === "string") return result;
-    if (result && (result as any).publicKey) return (result as any).publicKey;
-    return null;
+    const key = await getPublicKey();
+    return typeof key === "string" ? key : null;
   } catch {
     return null;
   }
