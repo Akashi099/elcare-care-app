@@ -23,6 +23,7 @@ import {
   ArtworkMetadata,
 } from "@/lib/ipfs";
 import { getReadableErrorMessage } from "@/lib/errors";
+import { config } from "@/lib/config";
 import { useTransientErrorToast } from "./useTransientErrorToast";
 import { assertSupportedTokenAddress } from "@/lib/token-support";
 import { trackEvent } from "@/providers/PostHogProvider";
@@ -150,6 +151,8 @@ export interface CreateListingInput {
   nftTokenId: number;
   price: number;
   tokenAddress?: string;
+  /** Revenue-split recipients; percentages must sum to exactly 100. */
+  recipients?: Array<{ address: string; percentage: number }>;
 }
 
 export function useCreateListing(artistPublicKey: string | null) {
@@ -182,7 +185,8 @@ export function useCreateListing(artistPublicKey: string | null) {
           input.price,
           token.address,
           input.collectionAddress,
-          input.nftTokenId
+          input.nftTokenId,
+          input.recipients ?? []
         );
 
         // Track successful listing creation
