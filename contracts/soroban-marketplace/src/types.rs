@@ -36,6 +36,9 @@ pub enum MarketplaceError {
     /// 10 000 bps (100%).  Rejected at listing creation and on any update that
     /// would mutate recipients, so an invalid split can never be persisted.
     RoyaltyExceedsLimit = 26,
+    /// Intermediate arithmetic in fee/royalty computation would overflow i128.
+    /// Reverts cleanly instead of panicking with an unmapped trap.
+    ArithmeticOverflow = 27,
 }
 
 #[contracttype]

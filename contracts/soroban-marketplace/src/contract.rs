@@ -305,7 +305,7 @@ impl MarketplaceContract {
         Self::validate_recipients(&env, &recipients, protocol_fee_bps);
 
         if !Self::is_token_whitelisted(&env, &token) {
-            panic_with_error!(&env, MarketplaceError::Unauthorized);
+            panic_with_error!(&env, MarketplaceError::TokenNotWhitelisted);
         }
 
         let listing_id = increment_listing_count(&env);
@@ -604,7 +604,7 @@ impl MarketplaceContract {
             panic_with_error!(&env, MarketplaceError::InvalidPrice);
         }
         if !Self::is_token_whitelisted(&env, &token) {
-            panic_with_error!(&env, MarketplaceError::Unauthorized);
+            panic_with_error!(&env, MarketplaceError::TokenNotWhitelisted);
         }
         let auction_id = increment_auction_count(&env);
         let end_time = env.ledger().timestamp() + duration;
@@ -769,6 +769,11 @@ impl MarketplaceContract {
         }
         if amount <= 0 {
             panic_with_error!(&env, MarketplaceError::InsufficientOfferAmount);
+        }
+        // Reject at creation time if the offer token is not whitelisted,
+        // giving the offerer immediate feedback instead of a failed purchase later.
+        if !Self::is_token_whitelisted(&env, &token) {
+            panic_with_error!(&env, MarketplaceError::TokenNotWhitelisted);
         }
         TokenClient::new(&env, &token).transfer(&offerer, &env.current_contract_address(), &amount);
         let offer_id = increment_offer_count(&env);
@@ -1125,12 +1130,20 @@ impl MarketplaceContract {
         let royalty_bps = royalty_info.1;
 
         if royalty_bps > 0 && royalty_receiver != seller.clone() {
-            let royalty = amount * royalty_bps as i128 / 10_000;
+            let royalty = amount
+                .checked_mul(royalty_bps as i128)
+                .unwrap_or_else(|| panic_with_error!(env, MarketplaceError::ArithmeticOverflow))
+                .checked_div(10_000)
+                .unwrap_or_else(|| panic_with_error!(env, MarketplaceError::ArithmeticOverflow));
             token.transfer(&env.current_contract_address(), &royalty_receiver, &royalty);
             payout -= royalty;
         }
         if let Some(t) = crate::storage::get_treasury_storage(env) {
-            let fee = payout * fee_bps as i128 / 10_000;
+            let fee = payout
+                .checked_mul(fee_bps as i128)
+                .unwrap_or_else(|| panic_with_error!(env, MarketplaceError::ArithmeticOverflow))
+                .checked_div(10_000)
+                .unwrap_or_else(|| panic_with_error!(env, MarketplaceError::ArithmeticOverflow));
             token.transfer(&env.current_contract_address(), &t, &fee);
             payout -= fee;
         }
@@ -1141,7 +1154,11 @@ impl MarketplaceContract {
             let amt = if i == len - 1 {
                 payout - ds
             } else {
-                (payout * r.percentage as i128) / 10_000
+                payout
+                    .checked_mul(r.percentage as i128)
+                    .unwrap_or_else(|| panic_with_error!(env, MarketplaceError::ArithmeticOverflow))
+                    .checked_div(10_000)
+                    .unwrap_or_else(|| panic_with_error!(env, MarketplaceError::ArithmeticOverflow))
             };
             token.transfer(&env.current_contract_address(), &r.address, &amt);
             ds += amt;
