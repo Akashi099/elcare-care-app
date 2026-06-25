@@ -1,4 +1,4 @@
-use super::*;
+﻿use super::*;
 use crate::types::{ListingStatus, OfferStatus, Recipient};
 
 mod mock_nft {
@@ -49,15 +49,15 @@ use soroban_sdk::{
     vec, Address, Env,
 };
 
-/// Helper — deploy the contract and a real test token, returning
+/// Helper â€” deploy the contract and a real test token, returning
 /// (env, client, artist, buyer, token_id, contract_id).
 fn setup() -> (
     Env,
     MarketplaceContractClient<'static>,
     Address,
     Address,
-    Address, // token_id  — a real SAC test token
-    Address, // contract_id — the marketplace contract
+    Address, // token_id  â€” a real SAC test token
+    Address, // contract_id â€” the marketplace contract
     Address, // collection_id
 ) {
     let env = Env::default();
@@ -123,9 +123,10 @@ fn test_set_treasury_and_protocol_fee() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
 
-    // Set protocol fee to 500 bps (5%) — applied at purchase time
+    // Set protocol fee to 500 bps (5%) â€” applied at purchase time
     client.set_protocol_fee(&artist, &500u32);
     assert_eq!(client.get_protocol_fee(), 500u32);
 
@@ -159,8 +160,9 @@ fn test_buy_artwork_no_treasury_fee_set() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
-    // Set protocol fee but no treasury — fee is discarded when treasury is absent
+    // Set protocol fee but no treasury â€” fee is discarded when treasury is absent
     client.set_protocol_fee(&artist, &300u32); // 3%
     let result = client.buy_artwork(&buyer, &id);
     assert!(result);
@@ -200,7 +202,7 @@ fn test_set_protocol_fee_too_high_panics() {
     client.set_protocol_fee(&artist, &2000u32);
 }
 
-// ── create_listing ───────────────────────────────────────────
+// â”€â”€ create_listing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 fn test_create_listing_success() {
@@ -220,6 +222,7 @@ fn test_create_listing_success() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
 
     assert_eq!(listing_id, 1);
@@ -247,6 +250,7 @@ fn test_create_listing_zero_price() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
 }
 
@@ -264,13 +268,14 @@ fn test_create_listing_empty_cid() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
 }
 
 #[test]
 #[should_panic(expected = "Error(Contract, #26)")]
 fn test_create_listing_invalid_split() {
-    // Recipients that sum to 11_000 bps (110%) — must be rejected at creation.
+    // Recipients that sum to 11_000 bps (110%) â€” must be rejected at creation.
     let (env, client, artist, _, token_id, _contract_id, collection_id) = setup();
     client.set_admin(&artist);
     client.add_token_to_whitelist(&token_id);
@@ -293,6 +298,7 @@ fn test_create_listing_invalid_split() {
         &collection_id,
         &1u64,
         &recipients,
+        &None::<u64>,
     );
 }
 
@@ -333,10 +339,11 @@ fn test_create_listing_too_many_recipients() {
         &collection_id,
         &1u64,
         &recipients,
+        &None::<u64>,
     );
 }
 
-// ── cancel_listing ───────────────────────────────────────────
+// â”€â”€ cancel_listing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 fn test_cancel_listing_success() {
@@ -352,6 +359,7 @@ fn test_cancel_listing_success() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
 
     let result = client.cancel_listing(&artist, &id);
@@ -395,11 +403,12 @@ fn test_cancel_listing_wrong_artist() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
     client.cancel_listing(&buyer, &id);
 }
 
-// ── update_listing ───────────────────────────────────────────
+// â”€â”€ update_listing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 fn test_update_listing_success() {
@@ -415,6 +424,7 @@ fn test_update_listing_success() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
 
     let new_cid = bytes!(&env, 0x516e6577434944);
@@ -443,6 +453,7 @@ fn test_update_listing_empty_cid() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
 
     let new_rec = valid_recipients(&env, &artist);
@@ -464,6 +475,7 @@ fn test_update_listing_wrong_artist() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
 
     let new_cid = bytes!(&env, 0x51);
@@ -486,6 +498,7 @@ fn test_update_listing_not_active() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
 
     client.cancel_listing(&artist, &id);
@@ -515,6 +528,7 @@ fn test_artist_revocation_and_reinstatement() {
             &collection_id,
             &1u64,
             &valid_recipients(&env, &artist_to_revoke),
+            &None::<u64>,
         );
         assert!(r.is_err());
     });
@@ -546,6 +560,7 @@ fn test_artist_revocation_and_reinstatement() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist_to_revoke),
+        &None::<u64>,
     );
     assert_eq!(id, 1u64);
 }
@@ -566,7 +581,7 @@ fn test_update_listing_fails_with_pending_offers() {
     client.update_listing(&artist, &listing_id, &10_000_000_i128, &token_id, &new_rec);
 }
 
-// ── get_artist_listings ──────────────────────────────────────
+// â”€â”€ get_artist_listings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 fn test_get_artist_listings() {
@@ -583,6 +598,7 @@ fn test_get_artist_listings() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
     client.create_listing(
         &artist,
@@ -592,6 +608,7 @@ fn test_get_artist_listings() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
     client.create_listing(
         &artist,
@@ -601,6 +618,7 @@ fn test_get_artist_listings() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
 
     let ids = client.get_artist_listings(&artist);
@@ -626,6 +644,7 @@ fn test_buy_artwork_success() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
 
     let result = client.buy_artwork(&buyer, &id);
@@ -671,6 +690,7 @@ fn test_buy_artwork_complex_split() {
         &collection_id,
         &1u64,
         &recipients,
+        &None::<u64>,
     );
     assert!(client.buy_artwork(&buyer, &id));
 
@@ -682,7 +702,7 @@ fn test_buy_artwork_complex_split() {
     assert_eq!(artist_got + colab1_got + colab2_got, price);
 }
 
-// ── get_listing not found ────────────────────────────────────
+// â”€â”€ get_listing not found â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 #[should_panic(expected = "Error(Contract, #3)")]
@@ -691,7 +711,7 @@ fn test_get_listing_not_found() {
     client.get_listing(&999);
 }
 
-// ── Admin/Whitelist Management Tests ───────────────────────
+// â”€â”€ Admin/Whitelist Management Tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 #[should_panic]
@@ -720,6 +740,7 @@ fn test_add_and_remove_token_whitelist() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
     assert_eq!(listing_id, 1u64);
 }
@@ -742,6 +763,7 @@ fn test_create_listing_with_non_whitelisted_token_panics() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
 }
 
@@ -759,6 +781,7 @@ fn test_create_listing_with_whitelisted_token_succeeds() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
     assert_eq!(listing_id, 1u64);
 }
@@ -780,8 +803,9 @@ fn test_buy_artwork_fee_greater_than_price() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
-    // Set protocol fee to 10% — applied at purchase time
+    // Set protocol fee to 10% â€” applied at purchase time
     client.set_protocol_fee(&artist, &1000u32);
     let result = client.buy_artwork(&buyer, &id);
     assert!(result);
@@ -808,8 +832,9 @@ fn test_buy_artwork_fee_rounding_precision() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
-    // Set protocol fee to 333 bps (3.33%) — applied at purchase time
+    // Set protocol fee to 333 bps (3.33%) â€” applied at purchase time
     client.set_protocol_fee(&artist, &333u32);
     let result = client.buy_artwork(&buyer, &id);
     assert!(result);
@@ -837,6 +862,7 @@ fn test_royalty_zero_percent() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
     let result = client.buy_artwork(&buyer, &id);
     assert!(result);
@@ -855,7 +881,7 @@ fn test_royalty_hundred_percent() {
     client.add_token_to_whitelist(&token_id);
     let cid = bytes!(&env, 0x516d74657374);
     let price = 10_000_000_i128;
-    // 100% royalty (10000 bps) — but artist IS original_creator, so royalty skipped (same address)
+    // 100% royalty (10000 bps) â€” but artist IS original_creator, so royalty skipped (same address)
     let id = client.create_listing(
         &artist,
         &price,
@@ -864,6 +890,7 @@ fn test_royalty_hundred_percent() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
     let result = client.buy_artwork(&buyer, &id);
     assert!(result);
@@ -891,6 +918,7 @@ fn test_royalty_rounding_precision() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
     let result = client.buy_artwork(&buyer, &id);
     assert!(result);
@@ -916,6 +944,7 @@ fn test_royalty_secondary_sale() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
     // First sale: artist sells to buyer
     let result = client.buy_artwork(&buyer, &id);
@@ -959,7 +988,7 @@ fn test_royalty_secondary_sale() {
     );
 }
 
-// ── Auction Tests ────────────────────────────────────────────
+// â”€â”€ Auction Tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 fn test_create_auction_success() {
@@ -1177,7 +1206,7 @@ fn test_outbid_refund_logic_check() {
     assert_eq!(token.balance(&buyer1), 100_000_000_000_i128);
 }
 
-// ── Offer Tests ─────────────────────────────────────────────
+// â”€â”€ Offer Tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// Helper to create a listing and return its ID.
 fn create_test_listing(
@@ -1197,6 +1226,7 @@ fn create_test_listing(
         &collection_id,
         &1u64,
         &valid_recipients(env, artist),
+        &None::<u64>,
     )
 }
 
@@ -1380,7 +1410,7 @@ fn test_accept_offer_rejects_others() {
     assert_eq!(token.balance(&buyer3), 100_000_000_000_i128);
 }
 
-// ── Admin and Revocation Tests ──────────────────────────────
+// â”€â”€ Admin and Revocation Tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 fn test_artist_revocation_flow() {
@@ -1400,6 +1430,7 @@ fn test_artist_revocation_flow() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
 
     // 2. Admin revokes artist
@@ -1415,6 +1446,7 @@ fn test_artist_revocation_flow() {
             &collection_id,
             &1u64,
             &valid_recipients(&env, &artist),
+            &None::<u64>,
         )
     });
     assert!(result.is_err());
@@ -1431,6 +1463,7 @@ fn test_artist_revocation_flow() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
 }
 
@@ -1604,7 +1637,7 @@ fn test_update_listing_success_with_recipients() {
     assert_eq!(listing.recipients.len(), 2);
 }
 
-// ── buy_artwork edge cases (Issue #124) ──────────────────────
+// â”€â”€ buy_artwork edge cases (Issue #124) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 #[should_panic(expected = "Error(Contract, #21)")]
@@ -1641,7 +1674,7 @@ fn test_buy_own_listing_fails() {
     client.buy_artwork(&artist, &id);
 }
 
-// ── update_listing recipient validation (Issue #175) ─────────
+// â”€â”€ update_listing recipient validation (Issue #175) â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 #[should_panic(expected = "Error(Contract, #26)")]
@@ -1650,7 +1683,7 @@ fn test_update_listing_invalid_split_fails() {
     client.set_admin(&artist);
     client.add_token_to_whitelist(&token_id);
     let id = create_test_listing(&env, &client, &artist, &token_id);
-    // Recipients summing to 12_000 bps — over 100%
+    // Recipients summing to 12_000 bps â€” over 100%
     let bad_recipients = vec![
         &env,
         Recipient {
@@ -1714,7 +1747,7 @@ fn test_update_listing_empty_recipients_fails() {
     );
 }
 
-// ── transfer_admin / accept_admin tests (Issue #162) ────────
+// â”€â”€ transfer_admin / accept_admin tests (Issue #162) â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 fn test_transfer_admin_two_step_succeeds() {
@@ -1744,7 +1777,7 @@ fn test_transfer_admin_wrong_caller_panics() {
     let new_admin = Address::generate(&env);
 
     client.set_admin(&admin);
-    // impostor tries to initiate transfer — should panic Unauthorized
+    // impostor tries to initiate transfer â€” should panic Unauthorized
     client.transfer_admin(&impostor, &new_admin);
 }
 
@@ -1757,11 +1790,11 @@ fn test_accept_admin_wrong_caller_panics() {
 
     client.set_admin(&admin);
     client.transfer_admin(&admin, &new_admin);
-    // A different address tries to accept — should panic Unauthorized
+    // A different address tries to accept â€” should panic Unauthorized
     client.accept_admin(&impostor);
 }
 
-// ── Event emission tests (Issue #180) ────────────────────────
+// â”€â”€ Event emission tests (Issue #180) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 fn has_event_with_topic(events: &soroban_sdk::testutils::ContractEvents, symbol: &str) -> bool {
     use soroban_sdk::xdr::{ContractEventBody, ScVal};
@@ -1968,7 +2001,7 @@ fn test_finalize_auction_emits_auction_resolved_event() {
     );
 }
 
-// ── Token transfer tests (Issue #165) ────────────────────────
+// â”€â”€ Token transfer tests (Issue #165) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 fn test_buy_artwork_transfers_correct_amounts_to_recipients() {
@@ -1985,6 +2018,7 @@ fn test_buy_artwork_transfers_correct_amounts_to_recipients() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
 
     let token = TokenClient::new(&env, &token_id);
@@ -2013,6 +2047,7 @@ fn test_buy_artwork_pays_royalty_on_secondary_sale() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
 
     // First sale (no royalty since original_creator == seller)
@@ -2069,6 +2104,7 @@ fn test_buy_artwork_pays_treasury_fee() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
     // Set fee to 500 bps (5%) after listing creation
     client.set_protocol_fee(&artist, &500u32); // 5%
@@ -2084,7 +2120,7 @@ fn test_buy_artwork_pays_treasury_fee() {
     );
 }
 
-// ── Pause / unpause lifecycle tests (Issue #200) ─────────────
+// â”€â”€ Pause / unpause lifecycle tests (Issue #200) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 fn test_admin_pause_and_unpause() {
@@ -2114,6 +2150,7 @@ fn test_create_listing_while_paused_fails() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
 }
 
@@ -2180,7 +2217,7 @@ fn test_actions_succeed_after_unpause() {
     assert!(client.buy_artwork(&buyer, &id));
 }
 
-// ── Offer edge cases (Issue #200) ─────────────────────────────
+// â”€â”€ Offer edge cases (Issue #200) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 #[should_panic(expected = "Error(Contract, #19)")]
@@ -2224,7 +2261,7 @@ fn test_reject_withdrawn_offer_fails() {
     let id = create_test_listing(&env, &client, &artist, &token_id);
     let offer_id = client.make_offer(&buyer, &id, &5_000_000_i128, &token_id);
     client.withdraw_offer(&buyer, &offer_id);
-    // Reject a withdrawn offer — status is no longer Pending
+    // Reject a withdrawn offer â€” status is no longer Pending
     client.reject_offer(&artist, &offer_id);
 }
 
@@ -2253,7 +2290,7 @@ fn test_withdraw_nonexistent_offer_fails() {
     client.withdraw_offer(&buyer, &9999_u64);
 }
 
-// ── Cancel listing edge cases (Issue #200) ───────────────────
+// â”€â”€ Cancel listing edge cases (Issue #200) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 #[should_panic(expected = "Error(Contract, #4)")]
@@ -2278,7 +2315,7 @@ fn test_cancel_sold_listing_fails() {
     client.cancel_listing(&artist, &id);
 }
 
-// ── Auction edge cases (Issue #200) ─────────────────────────
+// â”€â”€ Auction edge cases (Issue #200) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 #[should_panic(expected = "Error(Contract, #9)")]
@@ -2344,7 +2381,7 @@ fn test_bid_on_finalized_auction_fails() {
     client.place_bid(&new_bidder, &auction_id, &3_000_000_i128);
 }
 
-// ── Admin transfer edge cases (Issue #200) ──────────────────
+// â”€â”€ Admin transfer edge cases (Issue #200) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 #[should_panic]
@@ -2352,11 +2389,11 @@ fn test_accept_admin_with_no_pending_transfer_panics() {
     let (env, client, admin, _, _token_id, _, collection_id) = setup();
     let impostor = Address::generate(&env);
     client.set_admin(&admin);
-    // accept_admin when no transfer has been initiated — should panic
+    // accept_admin when no transfer has been initiated â€” should panic
     client.accept_admin(&impostor);
 }
 
-// ── Revoke / reinstate standalone tests (Issue #200) ────────
+// â”€â”€ Revoke / reinstate standalone tests (Issue #200) â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 fn test_revoke_and_reinstate_artist() {
@@ -2386,10 +2423,11 @@ fn test_revoked_artist_cannot_create_listing() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist2),
+        &None::<u64>,
     );
 }
 
-// ── Token whitelist edge cases (Issue #200) ─────────────────
+// â”€â”€ Token whitelist edge cases (Issue #200) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 fn test_get_token_whitelist_after_removal() {
@@ -2403,7 +2441,7 @@ fn test_get_token_whitelist_after_removal() {
     assert!(!list_after.iter().any(|t| t == token_id));
 }
 
-// ── Royalty bps validation tests (security)
+// â”€â”€ Royalty bps validation tests (security)
 
 #[test]
 fn test_create_listing_royalty_bps_max_allowed() {
@@ -2420,6 +2458,7 @@ fn test_create_listing_royalty_bps_max_allowed() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
     assert_eq!(id, 1u64);
 }
@@ -2439,6 +2478,7 @@ fn test_create_listing_royalty_bps_too_high() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
 }
 
@@ -2498,21 +2538,22 @@ fn test_buy_artwork_fails_if_token_delisted() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
-    // Admin removes token from whitelist — purchase should now be rejected at buy time
+    // Admin removes token from whitelist â€” purchase should now be rejected at buy time
     client.remove_token_from_whitelist(&token_id);
     client.buy_artwork(&buyer, &id);
 }
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // admin_pause / admin_unpause mechanism
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 #[test]
 fn test_is_paused_default_false() {
     let (env, client, artist, _buyer, token_id, _contract_id, collection_id) = setup();
     client.set_admin(&artist);
     client.add_token_to_whitelist(&token_id);
-    // Freshly deployed — must not be paused
+    // Freshly deployed â€” must not be paused
     assert!(!client.is_paused());
 }
 
@@ -2572,7 +2613,7 @@ fn test_admin_pause_rejects_non_admin() {
     let (env, client, artist, buyer, token_id, _contract_id, collection_id) = setup();
     client.set_admin(&artist);
     client.add_token_to_whitelist(&token_id);
-    // `buyer` is not the admin — must panic with Unauthorized
+    // `buyer` is not the admin â€” must panic with Unauthorized
     client.admin_pause(&buyer);
 }
 
@@ -2584,7 +2625,7 @@ fn test_admin_unpause_rejects_non_admin() {
     client.add_token_to_whitelist(&token_id);
 
     client.admin_pause(&artist);
-    // `buyer` is not the admin — must panic with Unauthorized
+    // `buyer` is not the admin â€” must panic with Unauthorized
     client.admin_unpause(&buyer);
 }
 
@@ -2652,9 +2693,9 @@ fn test_buy_artwork_blocked_when_paused() {
     client.buy_artwork(&buyer, &listing_id);
 }
 
-// ══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // RoyaltyExceedsLimit boundary tests (Issue A)
-// ══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 #[test]
 fn test_validate_recipients_exactly_10000_bps_succeeds() {
@@ -2678,6 +2719,7 @@ fn test_validate_recipients_exactly_10000_bps_succeeds() {
         &collection_id,
         &1u64,
         &recipients,
+        &None::<u64>,
     );
     assert_eq!(listing_id, 1u64);
 }
@@ -2709,6 +2751,7 @@ fn test_validate_recipients_10001_bps_rejected() {
         &collection_id,
         &1u64,
         &recipients,
+        &None::<u64>,
     );
 }
 
@@ -2730,6 +2773,7 @@ fn test_validate_recipients_empty_succeeds() {
             &collection_id,
             &1u64,
             &soroban_sdk::Vec::new(&env),
+            &None::<u64>,
         )
     });
     // Expect InvalidSplit (7), not RoyaltyExceedsLimit (26).
@@ -2759,11 +2803,12 @@ fn test_validate_recipients_single_recipient_at_limit_with_protocol_fee() {
         &collection_id,
         &1u64,
         &recipients,
+        &None::<u64>,
     );
     assert_eq!(listing_id, 1u64);
     // Now set the protocol fee; an update with the same recipients would also pass.
     client.set_protocol_fee(&artist, &500u32);
-    // Update_listing with 9_500 bps: 9_500 + 500 = 10_000 — should succeed.
+    // Update_listing with 9_500 bps: 9_500 + 500 = 10_000 â€” should succeed.
     let updated = client.update_listing(&artist, &listing_id, &2_000_000, &token_id, &recipients);
     assert!(updated);
 }
@@ -2772,7 +2817,7 @@ fn test_validate_recipients_single_recipient_at_limit_with_protocol_fee() {
 #[should_panic(expected = "Error(Contract, #26)")]
 fn test_validate_recipients_exceeds_limit_with_protocol_fee() {
     // When protocol_fee_bps = 500 (5%), recipients summing to 9_501 bps will
-    // result in total 10_001 bps — must be rejected with RoyaltyExceedsLimit.
+    // result in total 10_001 bps â€” must be rejected with RoyaltyExceedsLimit.
     let (env, client, artist, _, token_id, _contract_id, collection_id) = setup();
     client.set_admin(&artist);
     client.add_token_to_whitelist(&token_id);
@@ -2791,6 +2836,7 @@ fn test_validate_recipients_exceeds_limit_with_protocol_fee() {
                 percentage: 5_000,
             },
         ],
+        &None::<u64>,
     );
     // Set protocol fee
     client.set_protocol_fee(&artist, &500u32);
@@ -2805,9 +2851,9 @@ fn test_validate_recipients_exceeds_limit_with_protocol_fee() {
     client.update_listing(&artist, &listing_id, &2_000_000, &token_id, &bad_recipients);
 }
 
-// ══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // Reentrancy attack tests (Issue B)
-// ══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 mod mock_reentrant_token {
     use soroban_sdk::{contract, contractimpl, Address, Env, IntoVal};
@@ -2871,7 +2917,7 @@ mod mock_reentrant_token {
                 .set(&soroban_sdk::symbol_short!("atk"), &attacker);
         }
 
-        /// Standard token methods — minimal stubs for testing
+        /// Standard token methods â€” minimal stubs for testing
         pub fn balance(_env: Env, _id: Address) -> i128 {
             100_000_000_000_i128
         }
@@ -2913,6 +2959,7 @@ fn test_buy_artwork_reentrant_token_attack_fails() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
 
     // Configure the malicious token to re-enter buy_artwork on the same listing
@@ -2962,6 +3009,7 @@ fn test_buy_artwork_reentrant_token_different_listing_succeeds() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist1),
+        &None::<u64>,
     );
 
     let listing2_id = client.create_listing(
@@ -2972,9 +3020,10 @@ fn test_buy_artwork_reentrant_token_different_listing_succeeds() {
         &collection_id,
         &2u64,
         &valid_recipients(&env, &artist2),
+        &None::<u64>,
     );
 
-    // Buy both listings — should succeed since they have different listing_ids.
+    // Buy both listings â€” should succeed since they have different listing_ids.
     assert!(client.buy_artwork(&buyer, &listing1_id));
     assert!(client.buy_artwork(&buyer, &listing2_id));
 
@@ -2985,14 +3034,14 @@ fn test_buy_artwork_reentrant_token_different_listing_succeeds() {
     assert_eq!(listing2.status, crate::types::ListingStatus::Sold);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ISSUE-A: Protocol fee snapshot tests
 // Acceptance criteria:
 //   1. The fee applied at purchase equals the fee stored on the listing at
 //      creation, regardless of later admin changes.
 //   2. New listings adopt the current global fee at creation time.
 //   3. Settlement math is verified for both pre- and post-fee-change listings.
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 /// Helper: create a standard listing and return its ID.
 fn create_listing_with_fee(
@@ -3011,6 +3060,7 @@ fn create_listing_with_fee(
         collection_id,
         &1u64,
         &valid_recipients(env, artist),
+        &None::<u64>,
     )
 }
 
@@ -3022,7 +3072,7 @@ fn test_listing_snapshots_protocol_fee_at_creation() {
     client.set_admin(&artist);
     client.add_token_to_whitelist(&token_id);
 
-    // No fee set yet — default is 0
+    // No fee set yet â€” default is 0
     let listing_id = create_listing_with_fee(&env, &client, &artist, &token_id, &collection_id, 10_000_000);
 
     // Admin raises the fee AFTER the listing was created
@@ -3048,7 +3098,7 @@ fn test_new_listing_adopts_current_global_fee() {
     // Set fee to 300 bps (3%)
     client.set_protocol_fee(&artist, &300u32);
 
-    // Create a listing with 9700 bps recipients so combined == 10000 — valid
+    // Create a listing with 9700 bps recipients so combined == 10000 â€” valid
     let recipients = vec![
         &env,
         Recipient {
@@ -3064,6 +3114,7 @@ fn test_new_listing_adopts_current_global_fee() {
         &collection_id,
         &1u64,
         &recipients,
+        &None::<u64>,
     );
 
     let listing = client.get_listing(&listing_id);
@@ -3125,7 +3176,7 @@ fn test_buy_artwork_uses_snapshotted_fee_not_lowered_global() {
         &env,
         Recipient {
             address: artist.clone(),
-            percentage: 9_500, // 95% — leaves 500 bps for protocol fee
+            percentage: 9_500, // 95% â€” leaves 500 bps for protocol fee
         },
     ];
     let listing_id = client.create_listing(
@@ -3136,6 +3187,7 @@ fn test_buy_artwork_uses_snapshotted_fee_not_lowered_global() {
         &collection_id,
         &1u64,
         &recipients,
+        &None::<u64>,
     );
 
     // Lower global fee to 0 AFTER listing creation
@@ -3178,7 +3230,7 @@ fn test_accept_offer_uses_snapshotted_fee_not_raised_global() {
     // Admin raises global fee AFTER listing and offer creation
     client.set_protocol_fee(&artist, &500u32); // 5%
 
-    // Artist accepts the offer — settlement must use snapshotted fee (0)
+    // Artist accepts the offer â€” settlement must use snapshotted fee (0)
     client.accept_offer(&artist, &offer_id);
 
     let token = TokenClient::new(&env, &token_id);
@@ -3188,7 +3240,7 @@ fn test_accept_offer_uses_snapshotted_fee_not_raised_global() {
         0_i128,
         "treasury must receive 0 when snapshotted fee is 0 at listing creation"
     );
-    // Artist must receive the full offer amount (minus royalty — artist is also royalty receiver so skipped)
+    // Artist must receive the full offer amount (minus royalty â€” artist is also royalty receiver so skipped)
     assert_eq!(
         token.balance(&artist),
         100_000_000_000_i128 + offer_amount,
@@ -3212,19 +3264,19 @@ fn test_pre_and_post_fee_change_listings_settlement_math() {
 
     let price = 10_000_000_i128;
 
-    // Listing A — created while fee is 0
+    // Listing A â€” created while fee is 0
     let listing_a = create_listing_with_fee(&env, &client, &artist, &token_id, &collection_id, price);
 
     // Admin raises fee to 200 bps (2%)
     client.set_protocol_fee(&artist, &200u32);
 
-    // Listing B — created after fee change; recipients must leave room for 200 bps
+    // Listing B â€” created after fee change; recipients must leave room for 200 bps
     let collection_b = env.register(mock_nft::MockNft, ());
     let recipients_b = vec![
         &env,
         Recipient {
             address: artist.clone(),
-            percentage: 9_800, // 98% — leaves 2% for protocol fee
+            percentage: 9_800, // 98% â€” leaves 2% for protocol fee
         },
     ];
     let listing_b = client.create_listing(
@@ -3235,19 +3287,20 @@ fn test_pre_and_post_fee_change_listings_settlement_math() {
         &collection_b,
         &2u64,
         &recipients_b,
+        &None::<u64>,
     );
 
     // Verify snapshotted fees
     assert_eq!(client.get_listing(&listing_a).protocol_fee_bps, 0u32);
     assert_eq!(client.get_listing(&listing_b).protocol_fee_bps, 200u32);
 
-    // Settle listing A — buyer pays, treasury gets 0 (snapshotted fee 0)
+    // Settle listing A â€” buyer pays, treasury gets 0 (snapshotted fee 0)
     assert!(client.buy_artwork(&buyer, &listing_a));
     let token = TokenClient::new(&env, &token_id);
     let treasury_after_a = token.balance(&treasury);
     assert_eq!(treasury_after_a, 0_i128, "listing A must apply snapshotted fee of 0");
 
-    // Settle listing B — buyer2 pays, treasury gets 2% of price == 200_000
+    // Settle listing B â€” buyer2 pays, treasury gets 2% of price == 200_000
     assert!(client.buy_artwork(&buyer2, &listing_b));
     let treasury_after_b = token.balance(&treasury);
     assert_eq!(
@@ -3257,13 +3310,13 @@ fn test_pre_and_post_fee_change_listings_settlement_math() {
     );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ISSUE-B: Comprehensive pause enforcement tests
 // Acceptance criteria:
 //   1. Every mutating entry point reverts with ContractPaused when paused.
 //   2. unpause works while paused; reads are unaffected.
 //   3. A test matrix covers each mutating function under pause.
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 /// Helper: setup and pause the contract, returning all handles.
 fn setup_paused() -> (
@@ -3282,7 +3335,7 @@ fn setup_paused() -> (
     (env, client, artist, buyer, token_id, contract_id, collection_id)
 }
 
-// ── Pause matrix: create_listing ────────────────────────────
+// â”€â”€ Pause matrix: create_listing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 #[should_panic(expected = "Error(Contract, #23)")]
@@ -3291,7 +3344,7 @@ fn test_pause_matrix_create_listing() {
     create_listing_with_fee(&env, &client, &artist, &token_id, &collection_id, 1_000_000);
 }
 
-// ── Pause matrix: update_listing ────────────────────────────
+// â”€â”€ Pause matrix: update_listing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 #[should_panic(expected = "Error(Contract, #23)")]
@@ -3307,7 +3360,7 @@ fn test_pause_matrix_update_listing() {
     client.update_listing(&artist, &id, &2_000_000, &token_id, &valid_recipients(&env, &artist));
 }
 
-// ── Pause matrix: cancel_listing ────────────────────────────
+// â”€â”€ Pause matrix: cancel_listing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 #[should_panic(expected = "Error(Contract, #23)")]
@@ -3320,7 +3373,7 @@ fn test_pause_matrix_cancel_listing() {
     client.cancel_listing(&artist, &id);
 }
 
-// ── Pause matrix: buy_artwork ────────────────────────────────
+// â”€â”€ Pause matrix: buy_artwork â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 #[should_panic(expected = "Error(Contract, #23)")]
@@ -3333,7 +3386,7 @@ fn test_pause_matrix_buy_artwork() {
     client.buy_artwork(&buyer, &id);
 }
 
-// ── Pause matrix: create_auction ────────────────────────────
+// â”€â”€ Pause matrix: create_auction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 #[should_panic(expected = "Error(Contract, #23)")]
@@ -3350,7 +3403,7 @@ fn test_pause_matrix_create_auction() {
     );
 }
 
-// ── Pause matrix: place_bid ──────────────────────────────────
+// â”€â”€ Pause matrix: place_bid â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 #[should_panic(expected = "Error(Contract, #23)")]
@@ -3371,7 +3424,7 @@ fn test_pause_matrix_place_bid() {
     client.place_bid(&buyer, &auction_id, &2_000_000);
 }
 
-// ── Pause matrix: finalize_auction ──────────────────────────
+// â”€â”€ Pause matrix: finalize_auction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 #[should_panic(expected = "Error(Contract, #23)")]
@@ -3394,7 +3447,7 @@ fn test_pause_matrix_finalize_auction() {
     client.finalize_auction(&buyer, &auction_id);
 }
 
-// ── Pause matrix: make_offer ─────────────────────────────────
+// â”€â”€ Pause matrix: make_offer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 #[should_panic(expected = "Error(Contract, #23)")]
@@ -3407,7 +3460,7 @@ fn test_pause_matrix_make_offer() {
     client.make_offer(&buyer, &id, &500_000, &token_id);
 }
 
-// ── Pause matrix: withdraw_offer ────────────────────────────
+// â”€â”€ Pause matrix: withdraw_offer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 #[should_panic(expected = "Error(Contract, #23)")]
@@ -3421,7 +3474,7 @@ fn test_pause_matrix_withdraw_offer() {
     client.withdraw_offer(&buyer, &offer_id);
 }
 
-// ── Pause matrix: reject_offer ──────────────────────────────
+// â”€â”€ Pause matrix: reject_offer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 #[should_panic(expected = "Error(Contract, #23)")]
@@ -3435,7 +3488,7 @@ fn test_pause_matrix_reject_offer() {
     client.reject_offer(&artist, &offer_id);
 }
 
-// ── Pause matrix: accept_offer ──────────────────────────────
+// â”€â”€ Pause matrix: accept_offer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 #[should_panic(expected = "Error(Contract, #23)")]
@@ -3449,7 +3502,7 @@ fn test_pause_matrix_accept_offer() {
     client.accept_offer(&artist, &offer_id);
 }
 
-// ── Read-only functions are NOT blocked by pause ─────────────
+// â”€â”€ Read-only functions are NOT blocked by pause â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 fn test_reads_succeed_while_paused() {
@@ -3497,12 +3550,12 @@ fn test_reads_succeed_while_paused() {
     assert_eq!(fee, 0u32);
 }
 
-// ── admin_unpause works while paused ────────────────────────
+// â”€â”€ admin_unpause works while paused â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 fn test_unpause_works_while_paused() {
     let (env, client, artist, _buyer, token_id, _contract_id, collection_id) = setup_paused();
-    // Contract is paused — admin_unpause must succeed
+    // Contract is paused â€” admin_unpause must succeed
     assert!(client.is_paused());
     client.admin_unpause(&artist);
     assert!(!client.is_paused());
@@ -3511,7 +3564,7 @@ fn test_unpause_works_while_paused() {
     assert!(listing_id > 0);
 }
 
-// ── All mutating functions resume normally after unpause ─────
+// â”€â”€ All mutating functions resume normally after unpause â”€â”€â”€â”€â”€
 
 #[test]
 fn test_full_lifecycle_resumes_after_unpause() {
@@ -3532,13 +3585,13 @@ fn test_full_lifecycle_resumes_after_unpause() {
     assert_eq!(listing.status, ListingStatus::Cancelled);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ISSUE-A (cont): Enriched cancellation events
 // Acceptance criteria:
 //   1. Each cancellation path emits an event carrying the correct CancelReason.
 //   2. The event includes the actor (cancelled_by) and listing_id.
 //   3. Contract tests assert the event payload for each reason.
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 #[test]
 fn test_cancel_listing_emits_owner_reason() {
@@ -3594,6 +3647,7 @@ fn test_cancel_artist_listings_emits_admin_revoked_reason() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
 
     // Revoke the artist
@@ -3653,6 +3707,7 @@ fn test_cancel_artist_listings_refunds_pending_offers() {
         &collection_id,
         &1u64,
         &valid_recipients(&env, &artist),
+        &None::<u64>,
     );
 
     // Buyer makes an offer
@@ -3683,14 +3738,14 @@ fn test_cancel_artist_listings_refunds_pending_offers() {
     );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ISSUE-B (cont): TTL bump tests
 // Acceptance criteria:
 //   1. Frequently accessed listing/auction/offer entries do not expire during
 //      normal operation.
 //   2. TTL constants are defined in one place and reused (bump_entry_ttl).
 //   3. Ledger-advancement tests confirm survivability past the original TTL window.
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 #[test]
 fn test_listing_survives_ttl_threshold_with_frequent_reads() {
@@ -3706,7 +3761,7 @@ fn test_listing_survives_ttl_threshold_with_frequent_reads() {
         l.sequence_number += 140_000;
     });
 
-    // Read the listing — this should bump its TTL
+    // Read the listing â€” this should bump its TTL
     let listing = client.get_listing(&listing_id);
     assert_eq!(listing.listing_id, listing_id);
 
@@ -3741,7 +3796,7 @@ fn test_auction_survives_ttl_threshold_with_frequent_reads() {
         l.sequence_number += 140_000;
     });
 
-    // Read the auction — this should bump its TTL
+    // Read the auction â€” this should bump its TTL
     let auction = client.get_auction(&auction_id);
     assert_eq!(auction.auction_id, auction_id);
 
@@ -3770,7 +3825,7 @@ fn test_active_listings_index_survives_with_frequent_reads() {
         l.sequence_number += 140_000;
     });
 
-    // Read the active listings — this should bump the index TTL
+    // Read the active listings â€” this should bump the index TTL
     let active = client.get_active_listings(&0u32, &10u32);
     assert!(!active.is_empty());
 
@@ -3799,7 +3854,7 @@ fn test_offer_survives_ttl_threshold_with_frequent_reads() {
         l.sequence_number += 140_000;
     });
 
-    // Read the offer — this should bump its TTL
+    // Read the offer â€” this should bump its TTL
     let offer = client.get_offer(&offer_id);
     assert_eq!(offer.offer_id, offer_id);
 
@@ -3827,7 +3882,7 @@ fn test_listing_offers_index_survives_ttl_threshold() {
         l.sequence_number += 140_000;
     });
 
-    // Read the listing offers index — this should bump its TTL
+    // Read the listing offers index â€” this should bump its TTL
     let offers = client.get_listing_offers(&listing_id);
     assert!(!offers.is_empty());
 
@@ -3855,7 +3910,7 @@ fn test_artist_listings_index_survives_ttl_threshold() {
         l.sequence_number += 140_000;
     });
 
-    // Read the artist listings index — this should bump its TTL
+    // Read the artist listings index â€” this should bump its TTL
     let ids = client.get_artist_listings(&artist);
     assert!(!ids.is_empty());
 

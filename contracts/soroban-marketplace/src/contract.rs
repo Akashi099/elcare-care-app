@@ -298,12 +298,20 @@ impl MarketplaceContract {
         collection: Address,
         token_id: u64,
         recipients: Vec<Recipient>,
+        expires_at: Option<u64>,
     ) -> u64 {
         Self::require_not_paused(&env);
         artist.require_auth();
         Self::require_not_revoked(&env, &artist);
         if price <= 0 {
             panic_with_error!(&env, MarketplaceError::InvalidPrice);
+        }
+
+        // Validate expiry is strictly in the future if provided
+        if let Some(exp) = expires_at {
+            if exp <= env.ledger().timestamp() {
+                panic_with_error!(&env, MarketplaceError::InvalidPrice);
+            }
         }
 
         let recipients_len = recipients.len();
@@ -343,6 +351,7 @@ impl MarketplaceContract {
             owner: None,
             created_at: env.ledger().sequence(),
             protocol_fee_bps, // Snapshot the fee at creation time
+            expires_at,
         };
         save_listing(&env, &listing);
         add_artist_listing_id(&env, &artist, listing_id);
@@ -478,6 +487,14 @@ impl MarketplaceContract {
             panic_with_error!(&env, MarketplaceError::CannotBuyOwnListing);
         }
 
+        // Reject purchase if the listing has an expiry that has passed.
+        if let Some(exp) = listing.expires_at {
+            if env.ledger().timestamp() >= exp {
+                release_listing_lock(&env, listing_id);
+                panic_with_error!(&env, MarketplaceError::ListingExpired);
+            }
+        }
+
         // Ensure token is still whitelisted at purchase time. If it was removed after listing creation, block the purchase.
         if !Self::is_token_whitelisted(&env, &listing.token) {
             release_listing_lock(&env, listing_id);
@@ -603,6 +620,105 @@ impl MarketplaceContract {
         .publish(&env);
 
         true
+    }
+
+    // ── update_listing_price ─────────────────────────────────────────────────
+    //
+    // Allows the listing owner to update the price of an active listing in
+    // place without cancelling and re-creating it.  The listing id and
+    // creation ledger are preserved.  A ListingPriceUpdated event is emitted
+    // with both the old and new price so indexers can reconstruct a full price
+    // history.
+
+    pub fn update_listing_price(
+        env: Env,
+        seller: Address,
+        listing_id: u64,
+        new_price: i128,
+    ) -> bool {
+        Self::require_not_paused(&env);
+        seller.require_auth();
+
+        let mut listing = load_listing(&env, listing_id)
+            .unwrap_or_else(|| panic_with_error!(&env, MarketplaceError::ListingNotFound));
+
+        // Only the listing owner (artist) may update the price.
+        if listing.artist != seller {
+            panic_with_error!(&env, MarketplaceError::Unauthorized);
+        }
+
+        // Listing must still be active.
+        if listing.status != ListingStatus::Active {
+            panic_with_error!(&env, MarketplaceError::ListingNotActive);
+        }
+
+        // Validate the new price is positive.
+        if new_price <= 0 {
+            panic_with_error!(&env, MarketplaceError::InvalidPrice);
+        }
+
+        // Upper-bound sanity: price must not exceed i128::MAX / 10_000 to avoid
+        // overflow in the payout distribution math.
+        let price_upper_bound: i128 = i128::MAX / 10_000;
+        if new_price > price_upper_bound {
+            panic_with_error!(&env, MarketplaceError::InvalidPrice);
+        }
+
+        let old_price = listing.price;
+        listing.price = new_price;
+
+        // Persist the updated listing and bump its TTL so the change is durable.
+        save_listing(&env, &listing);
+
+        crate::events::ListingPriceUpdatedEvent {
+            listing_id,
+            old_price,
+            new_price,
+            updated_by: seller.clone(),
+        }
+        .publish(&env);
+
+        true
+    }
+
+    // ── expire_listing ───────────────────────────────────────────────────────
+    //
+    // Permissionless entry point: anyone may call this to move an expired
+    // listing out of the active set.  The listing must have an `expires_at`
+    // timestamp that has already passed.  Calling it before expiry reverts
+    // with ListingNotExpired.
+
+    pub fn expire_listing(env: Env, listing_id: u64) {
+        let mut listing = load_listing(&env, listing_id)
+            .unwrap_or_else(|| panic_with_error!(&env, MarketplaceError::ListingNotFound));
+
+        // Only Active listings can be expired.
+        if listing.status != ListingStatus::Active {
+            panic_with_error!(&env, MarketplaceError::ListingNotActive);
+        }
+
+        // The listing must actually have an expiry and it must have passed.
+        let exp = match listing.expires_at {
+            Some(t) => t,
+            None => panic_with_error!(&env, MarketplaceError::ListingNotExpired),
+        };
+        if env.ledger().timestamp() < exp {
+            panic_with_error!(&env, MarketplaceError::ListingNotExpired);
+        }
+
+        // ── Effects ──────────────────────────────────────────────────────────
+        // Mark the listing Cancelled (semantically: expired).  We reuse the
+        // Cancelled status so the indexer only has to handle one terminal state.
+        listing.status = ListingStatus::Cancelled;
+        save_listing(&env, &listing);
+        remove_from_active_listings(&env, listing_id);
+
+        crate::events::ListingExpiredEvent {
+            listing_id,
+            expired_at: exp,
+            ledger_sequence: env.ledger().sequence(),
+        }
+        .publish(&env);
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -936,6 +1052,14 @@ impl MarketplaceContract {
         if offer.status != OfferStatus::Pending || listing.status != ListingStatus::Active {
             release_listing_lock(&env, listing_id);
             panic_with_error!(&env, MarketplaceError::OfferNotPending);
+        }
+
+        // Reject offer acceptance if the listing has an expiry that has passed.
+        if let Some(exp) = listing.expires_at {
+            if env.ledger().timestamp() >= exp {
+                release_listing_lock(&env, listing_id);
+                panic_with_error!(&env, MarketplaceError::ListingExpired);
+            }
         }
 
         // ── CHECKS-EFFECTS-INTERACTIONS ──────────────────────────────────────
