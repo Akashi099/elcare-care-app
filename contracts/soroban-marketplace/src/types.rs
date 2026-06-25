@@ -36,6 +36,12 @@ pub enum MarketplaceError {
     /// 10 000 bps (100%).  Rejected at listing creation and on any update that
     /// would mutate recipients, so an invalid split can never be persisted.
     RoyaltyExceedsLimit = 26,
+    /// The listing has passed its `expires_at` ledger timestamp and can no
+    /// longer be purchased or updated.
+    ListingExpired = 27,
+    /// `expire_listing` was called on a listing whose `expires_at` is still in
+    /// the future (or the listing has no expiry).
+    ListingNotExpired = 28,
 }
 
 #[contracttype]
@@ -88,6 +94,12 @@ pub struct Listing {
     /// This ensures the fee applied at purchase matches what was displayed when
     /// the listing was created, regardless of subsequent admin fee changes.
     pub protocol_fee_bps: u32,
+    /// Optional expiry as a Unix ledger timestamp (seconds since epoch).
+    /// When `Some(t)` and `env.ledger().timestamp() >= t`, the listing is
+    /// considered expired and cannot be purchased.  `None` means no expiry
+    /// (the listing lives until cancelled or sold).  Listings created before
+    /// this field was introduced will deserialise as `None` automatically.
+    pub expires_at: Option<u64>,
 }
 
 #[contracttype]
