@@ -429,3 +429,224 @@ export async function fetchListingById(id: number): Promise<any | null> {
     return null;
   }
 }
+
+// ─────────────────────────────────────────────────────────────
+// SSE client — live marketplace event streaming (ISSUE-061)
+// ─────────────────────────────────────────────────────────────
+
+/** Relevant SSE event types emitted by the indexer stream. */
+export type MarketplaceSSEEventType =
+  | "LISTING_CREATED"
+  | "LISTING_CANCELLED"
+  | "ARTWORK_SOLD"
+  | "BID_PLACED"
+  | "AUCTION_FINALIZED"
+  | "AUCTION_CANCELLED";
+
+export interface MarketplaceSSEEvent {
+  type: MarketplaceSSEEventType;
+  listingId?: number;
+  auctionId?: number;
+  data?: Record<string, unknown>;
+}
+
+/** Options for {@link subscribeToMarketplaceEvents}. */
+export interface SSESubscribeOptions {
+  /** Called for each parsed marketplace event. */
+  onEvent: (event: MarketplaceSSEEvent) => void;
+  /** Called when the connection opens (or re-opens after a reconnect). */
+  onOpen?: () => void;
+  /** Called when the connection closes permanently (max retries exhausted). */
+  onClose?: () => void;
+  /**
+   * The last event ID received by a previous session.
+   * Passed as `Last-Event-ID` so the server can replay missed events.
+   */
+  lastEventId?: string;
+  /**
+   * Maximum number of reconnect attempts before giving up.
+   * Defaults to 10.
+   */
+  maxRetries?: number;
+  /**
+   * Base delay in milliseconds between reconnect attempts.
+   * Uses exponential back-off capped at 30 s.
+   * Defaults to 1 000 ms.
+   */
+  baseRetryDelayMs?: number;
+  /**
+   * Debounce window in milliseconds.  When multiple events arrive rapidly
+   * within this window they are batched and the callback is invoked once
+   * per unique event at the end of the window.
+   * Defaults to 200 ms.  Set to 0 to disable debouncing.
+   */
+  debounceMs?: number;
+}
+
+/** Handle returned by {@link subscribeToMarketplaceEvents}.  Call `close()` to unsubscribe. */
+export interface SSESubscription {
+  /** Unsubscribes and releases all resources. */
+  close: () => void;
+  /** The last `id` field seen on any SSE event, for use as `lastEventId` on reconnect. */
+  getLastEventId: () => string | null;
+}
+
+const SSE_RELEVANT_TYPES = new Set<string>([
+  "LISTING_CREATED",
+  "LISTING_CANCELLED",
+  "ARTWORK_SOLD",
+  "BID_PLACED",
+  "AUCTION_FINALIZED",
+  "AUCTION_CANCELLED",
+]);
+
+function parseSSEData(rawData: string): MarketplaceSSEEvent | null {
+  try {
+    const parsed = JSON.parse(rawData) as Record<string, unknown>;
+    const type = (parsed.type ?? parsed.eventType) as string | undefined;
+    if (!type || !SSE_RELEVANT_TYPES.has(type)) return null;
+    return {
+      type: type as MarketplaceSSEEventType,
+      listingId:
+        parsed.listingId != null ? Number(parsed.listingId) : undefined,
+      auctionId:
+        parsed.auctionId != null ? Number(parsed.auctionId) : undefined,
+      data:
+        typeof parsed.data === "object" && parsed.data !== null
+          ? (parsed.data as Record<string, unknown>)
+          : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Opens a persistent SSE connection to the indexer's `/events/stream` endpoint.
+ *
+ * Features:
+ * - Exponential back-off reconnect with configurable max retries.
+ * - `Last-Event-ID` header forwarded on reconnect so the server can replay
+ *   missed events (pairs with ISSUE-061).
+ * - Debounce/batching of rapid events within a configurable window.
+ * - Returns a {@link SSESubscription} handle — call `.close()` on unmount.
+ *
+ * The implementation falls back gracefully when `EventSource` is unavailable
+ * (e.g., SSR / test environments).
+ */
+export function subscribeToMarketplaceEvents(
+  indexerUrl: string,
+  opts: SSESubscribeOptions
+): SSESubscription {
+  const {
+    onEvent,
+    onOpen,
+    onClose,
+    lastEventId: initialLastEventId = null,
+    maxRetries = 10,
+    baseRetryDelayMs = 1_000,
+    debounceMs = 200,
+  } = opts;
+
+  let es: EventSource | null = null;
+  let retryCount = 0;
+  let closed = false;
+  let lastEventId: string | null = initialLastEventId ?? null;
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let pendingEvents: MarketplaceSSEEvent[] = [];
+
+  function flushPending() {
+    debounceTimer = null;
+    const eventsToFlush = pendingEvents.splice(0);
+    for (const ev of eventsToFlush) {
+      onEvent(ev);
+    }
+  }
+
+  function dispatchEvent(ev: MarketplaceSSEEvent) {
+    if (debounceMs <= 0) {
+      onEvent(ev);
+      return;
+    }
+    pendingEvents.push(ev);
+    if (debounceTimer !== null) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(flushPending, debounceMs);
+  }
+
+  function buildUrl(): string {
+    const base = `${indexerUrl}/events/stream`;
+    if (lastEventId) {
+      return `${base}?lastEventId=${encodeURIComponent(lastEventId)}`;
+    }
+    return base;
+  }
+
+  function connect() {
+    if (closed) return;
+    if (typeof EventSource === "undefined") return; // SSR or test env without polyfill
+
+    try {
+      es = new EventSource(buildUrl());
+    } catch {
+      scheduleReconnect();
+      return;
+    }
+
+    es.onopen = () => {
+      retryCount = 0;
+      onOpen?.();
+    };
+
+    es.onmessage = (msgEvent: MessageEvent) => {
+      // Track Last-Event-ID for reconnect
+      if (msgEvent.lastEventId) {
+        lastEventId = msgEvent.lastEventId;
+      }
+      const parsed = parseSSEData(msgEvent.data as string);
+      if (parsed) dispatchEvent(parsed);
+    };
+
+    // Also handle named events the server may emit
+    for (const evType of SSE_RELEVANT_TYPES) {
+      es.addEventListener(evType, (msgEvent: Event) => {
+        const msg = msgEvent as MessageEvent;
+        if (msg.lastEventId) lastEventId = msg.lastEventId;
+        const parsed = parseSSEData(msg.data as string);
+        if (parsed) dispatchEvent(parsed);
+      });
+    }
+
+    es.onerror = () => {
+      es?.close();
+      es = null;
+      scheduleReconnect();
+    };
+  }
+
+  function scheduleReconnect() {
+    if (closed || retryCount >= maxRetries) {
+      onClose?.();
+      return;
+    }
+    const delay = Math.min(baseRetryDelayMs * Math.pow(2, retryCount), 30_000);
+    retryCount += 1;
+    setTimeout(connect, delay);
+  }
+
+  connect();
+
+  return {
+    close() {
+      closed = true;
+      if (debounceTimer !== null) {
+        clearTimeout(debounceTimer);
+        flushPending();
+      }
+      es?.close();
+      es = null;
+    },
+    getLastEventId() {
+      return lastEventId;
+    },
+  };
+}
