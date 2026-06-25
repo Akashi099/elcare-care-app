@@ -20,8 +20,10 @@ pub const ARTIST_REVOKED: Symbol = symbol_short!("art_rvkd");
 pub const ARTIST_REINSTATED: Symbol = symbol_short!("art_rnst");
 pub const CONTRACT_PAUSED: Symbol = symbol_short!("ctr_psd");
 pub const CONTRACT_UNPAUSED: Symbol = symbol_short!("ctr_unpsd");
-pub const AUCTION_EXTENDED: Symbol = symbol_short!("auc_extd");
-pub const AUCTION_CANCELLED: Symbol = symbol_short!("auc_cncl");
+pub const LISTING_PRICE_UPDATED: Symbol = symbol_short!("lst_pru");
+pub const LISTING_EXPIRED: Symbol = symbol_short!("lst_expd");
+
+// Event data structs
 // Event data structs
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -174,6 +176,42 @@ impl ListingUpdatedEvent {
     #[allow(deprecated)]
     pub fn publish(self, env: &Env) {
         env.events().publish((LISTING_UPDATED,), self);
+    }
+}
+
+/// Emitted when a seller updates the price of an active listing in-place via
+/// `update_listing_price`.  Both the old and new price are recorded so that
+/// indexers can reconstruct the full price history of every listing.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ListingPriceUpdatedEvent {
+    pub listing_id: u64,
+    pub old_price: i128,
+    pub new_price: i128,
+    pub updated_by: Address,
+}
+
+/// Emitted when anyone calls `expire_listing` on a genuinely expired listing,
+/// transitioning it from Active → Expired/Cancelled.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ListingExpiredEvent {
+    pub listing_id: u64,
+    pub expired_at: u64,
+    pub ledger_sequence: u32,
+}
+
+impl ListingPriceUpdatedEvent {
+    #[allow(deprecated)]
+    pub fn publish(self, env: &Env) {
+        env.events().publish((LISTING_PRICE_UPDATED,), self);
+    }
+}
+
+impl ListingExpiredEvent {
+    #[allow(deprecated)]
+    pub fn publish(self, env: &Env) {
+        env.events().publish((LISTING_EXPIRED,), self);
     }
 }
 
