@@ -29,27 +29,10 @@ use crate::{
     types::{CollectionKind, CollectionRecord, Error},
 };
 
-// ─── Metadata validation (fix #47) ───────────────────────────────────────────
-const MAX_NAME_LEN: u32 = 64;
-const MAX_SYMBOL_LEN: u32 = 16;
-
-fn validate_name(name: &String) -> Result<(), Error> {
-    if name.len() == 0 || name.len() > MAX_NAME_LEN {
-        return Err(Error::InvalidCollectionMetadata);
-    }
-    Ok(())
-}
-
-fn validate_symbol(symbol: &String) -> Result<(), Error> {
-    if symbol.len() == 0 || symbol.len() > MAX_SYMBOL_LEN {
-        return Err(Error::InvalidCollectionMetadata);
-    }
-    Ok(())
-}
+/// Maximum allowed platform fee (20 %) — issue #38.
+const MAX_FEE_BPS: u32 = 2000;
 
 // ─── Cross-contract clients ───────────────────────────────────────────────────
-// We define minimal interfaces for the four collection types so the factory
-// can call `initialize` on freshly deployed contracts in the same transaction.
 
 mod iface {
     use soroban_sdk::{contractclient, Address, BytesN, Env, String};
@@ -78,6 +61,7 @@ mod iface {
         );
     }
 
+    /// Issue #38: lazy mint contracts accept per-collection platform fee at init.
     #[contractclient(name = "Lazy721Client")]
     #[allow(clippy::too_many_arguments)]
     pub trait ILazy721 {
@@ -90,10 +74,13 @@ mod iface {
             max_supply: u64,
             royalty_bps: u32,
             royalty_receiver: Address,
+            platform_fee_receiver: Address,
+            platform_fee_bps: u32,
         );
     }
 
     #[contractclient(name = "Lazy1155Client")]
+    #[allow(clippy::too_many_arguments)]
     pub trait ILazy1155 {
         fn initialize(
             env: Env,
@@ -102,18 +89,15 @@ mod iface {
             name: String,
             royalty_bps: u32,
             royalty_receiver: Address,
+            platform_fee_receiver: Address,
+            platform_fee_bps: u32,
         );
     }
 }
 
 use iface::{Lazy1155Client, Lazy721Client, Normal1155Client, Normal721Client};
 
-// ─── Salt hardening (fix #53) ─────────────────────────────────────────────────
-/// Bind `raw_salt` to the caller so that two different creators can never
-/// collide, and a front-runner who copies someone else's salt will end up
-/// deploying to a *different* address than the victim.
-///
-/// `secure_salt = sha256( creator.to_xdr() ‖ raw_salt )`
+// ─── Salt hardening ───────────────────────────────────────────────────────────
 fn make_secure_salt(env: &Env, creator: &Address, raw_salt: &BytesN<32>) -> BytesN<32> {
     let mut raw = Bytes::new(env);
     raw.append(&creator.to_xdr(env));
@@ -143,17 +127,6 @@ impl Launchpad {
         Ok(())
     }
 
-    // ── Admin: register WASM hashes ───────────────────────────────────────
-
-    /// Must be called by admin after uploading the four WASMs to the network.
-    ///
-    /// ```bash
-    /// # Upload each WASM and grab its hash:
-    /// stellar contract upload --wasm normal_721.wasm --network testnet
-    /// stellar contract upload --wasm normal_1155.wasm --network testnet
-    /// stellar contract upload --wasm lazy_721.wasm --network testnet
-    /// stellar contract upload --wasm lazy_1155.wasm --network testnet
-    /// ```
     pub fn set_wasm_hashes(
         env: Env,
         wasm_normal_721: BytesN<32>,
@@ -175,10 +148,7 @@ impl Launchpad {
 
     // ── Deploy: Normal ERC-721 ────────────────────────────────────────────
 
-    /// Deploy a Normal 721 collection.
-    ///
-    /// `salt` — any unique 32 bytes.  Tip: use sha256(creator ‖ name ‖ timestamp)
-    ///          so the resulting collection address is predictable off-chain.
+    /// Issue #38: `platform_fee_bps` is validated (≤ MAX_FEE_BPS) and stored in the registry.
     pub fn deploy_normal_721(
         env: Env,
         creator: Address,
@@ -188,13 +158,15 @@ impl Launchpad {
         max_supply: u64,
         royalty_bps: u32,
         royalty_receiver: Address,
+        platform_fee_bps: u32,
         salt: BytesN<32>,
     ) -> Result<Address, Error> {
         storage::extend_instance_ttl(&env);
         creator.require_auth();
 
-        validate_name(&name)?;
-        validate_symbol(&symbol)?;
+        if platform_fee_bps > MAX_FEE_BPS {
+            return Err(Error::InvalidFeeBps);
+        }
 
         let (receiver, fee) = storage::get_platform_fee(&env);
         if fee > 0 {
@@ -208,15 +180,12 @@ impl Launchpad {
 
         let wasm = storage::get_wasm_normal_721(&env).ok_or(Error::WasmHashNotSet)?;
 
-        // Deploy a new contract instance that shares the Normal721 WASM.
-        // Use a creator-bound salt to prevent front-running (fix #53).
         let secure_salt = make_secure_salt(&env, &creator, &salt);
         let addr = env
             .deployer()
             .with_current_contract(secure_salt)
             .deploy_v2(wasm, ());
 
-        // Initialize the freshly deployed collection in the same tx
         Normal721Client::new(&env, &addr).initialize(
             &creator,
             &name,
@@ -226,7 +195,16 @@ impl Launchpad {
             &royalty_receiver,
         );
 
-        storage::record_collection(&env, &creator, &addr, CollectionKind::Normal721);
+        storage::record_collection(
+            &env,
+            &creator,
+            &addr,
+            CollectionKind::Normal721,
+            &name,
+            &symbol,
+            env.ledger().sequence(),
+            platform_fee_bps,
+        );
         events::publish_deploy(&env, symbol_short!("n721"), &creator, &addr);
         Ok(addr)
     }
@@ -239,12 +217,15 @@ impl Launchpad {
         name: String,
         royalty_bps: u32,
         royalty_receiver: Address,
+        platform_fee_bps: u32,
         salt: BytesN<32>,
     ) -> Result<Address, Error> {
         storage::extend_instance_ttl(&env);
         creator.require_auth();
 
-        validate_name(&name)?;
+        if platform_fee_bps > MAX_FEE_BPS {
+            return Err(Error::InvalidFeeBps);
+        }
 
         let (receiver, fee) = storage::get_platform_fee(&env);
         if fee > 0 {
@@ -258,7 +239,6 @@ impl Launchpad {
 
         let wasm = storage::get_wasm_normal_1155(&env).ok_or(Error::WasmHashNotSet)?;
 
-        // Use a creator-bound salt to prevent front-running (fix #53).
         let secure_salt = make_secure_salt(&env, &creator, &salt);
         let addr = env
             .deployer()
@@ -272,16 +252,25 @@ impl Launchpad {
             &royalty_receiver,
         );
 
-        storage::record_collection(&env, &creator, &addr, CollectionKind::Normal1155);
+        let empty_symbol = String::from_str(&env, "");
+        storage::record_collection(
+            &env,
+            &creator,
+            &addr,
+            CollectionKind::Normal1155,
+            &name,
+            &empty_symbol,
+            env.ledger().sequence(),
+            platform_fee_bps,
+        );
         events::publish_deploy(&env, symbol_short!("n1155"), &creator, &addr);
         Ok(addr)
     }
 
     // ── Deploy: LazyMint ERC-721 ──────────────────────────────────────────
 
-    /// `creator_pubkey` — the raw 32-byte ed25519 public key of the creator's
-    /// Stellar keypair.  Off-chain tools sign mint vouchers with the matching
-    /// private key.  You can derive this from any `G...` address.
+    /// Issue #38: passes per-collection fee to the lazy mint contract so that
+    /// fee splits are applied at voucher redemption time.
     pub fn deploy_lazy_721(
         env: Env,
         creator: Address,
@@ -292,19 +281,21 @@ impl Launchpad {
         max_supply: u64,
         royalty_bps: u32,
         royalty_receiver: Address,
+        platform_fee_bps: u32,
         salt: BytesN<32>,
     ) -> Result<Address, Error> {
         storage::extend_instance_ttl(&env);
         creator.require_auth();
 
-        validate_name(&name)?;
-        validate_symbol(&symbol)?;
+        if platform_fee_bps > MAX_FEE_BPS {
+            return Err(Error::InvalidFeeBps);
+        }
 
-        let (receiver, fee) = storage::get_platform_fee(&env);
+        let (platform_fee_receiver, fee) = storage::get_platform_fee(&env);
         if fee > 0 {
             soroban_sdk::token::TokenClient::new(&env, &currency).transfer(
                 &creator,
-                &receiver,
+                &platform_fee_receiver,
                 &(fee as i128),
             );
             events::publish_deployment_fee_collected(&env, &creator, &receiver, fee as i128, &currency);
@@ -312,7 +303,6 @@ impl Launchpad {
 
         let wasm = storage::get_wasm_lazy_721(&env).ok_or(Error::WasmHashNotSet)?;
 
-        // Use a creator-bound salt to prevent front-running (fix #53).
         let secure_salt = make_secure_salt(&env, &creator, &salt);
         let addr = env
             .deployer()
@@ -327,9 +317,20 @@ impl Launchpad {
             &max_supply,
             &royalty_bps,
             &royalty_receiver,
+            &platform_fee_receiver,
+            &platform_fee_bps,
         );
 
-        storage::record_collection(&env, &creator, &addr, CollectionKind::LazyMint721);
+        storage::record_collection(
+            &env,
+            &creator,
+            &addr,
+            CollectionKind::LazyMint721,
+            &name,
+            &symbol,
+            env.ledger().sequence(),
+            platform_fee_bps,
+        );
         events::publish_deploy(&env, symbol_short!("l721"), &creator, &addr);
         Ok(addr)
     }
@@ -343,18 +344,21 @@ impl Launchpad {
         name: String,
         royalty_bps: u32,
         royalty_receiver: Address,
+        platform_fee_bps: u32,
         salt: BytesN<32>,
     ) -> Result<Address, Error> {
         storage::extend_instance_ttl(&env);
         creator.require_auth();
 
-        validate_name(&name)?;
+        if platform_fee_bps > MAX_FEE_BPS {
+            return Err(Error::InvalidFeeBps);
+        }
 
-        let (receiver, fee) = storage::get_platform_fee(&env);
+        let (platform_fee_receiver, fee) = storage::get_platform_fee(&env);
         if fee > 0 {
             soroban_sdk::token::TokenClient::new(&env, &currency).transfer(
                 &creator,
-                &receiver,
+                &platform_fee_receiver,
                 &(fee as i128),
             );
             events::publish_deployment_fee_collected(&env, &creator, &receiver, fee as i128, &currency);
@@ -362,7 +366,6 @@ impl Launchpad {
 
         let wasm = storage::get_wasm_lazy_1155(&env).ok_or(Error::WasmHashNotSet)?;
 
-        // Use a creator-bound salt to prevent front-running (fix #53).
         let secure_salt = make_secure_salt(&env, &creator, &salt);
         let addr = env
             .deployer()
@@ -375,9 +378,21 @@ impl Launchpad {
             &name,
             &royalty_bps,
             &royalty_receiver,
+            &platform_fee_receiver,
+            &platform_fee_bps,
         );
 
-        storage::record_collection(&env, &creator, &addr, CollectionKind::LazyMint1155);
+        let empty_symbol = String::from_str(&env, "");
+        storage::record_collection(
+            &env,
+            &creator,
+            &addr,
+            CollectionKind::LazyMint1155,
+            &name,
+            &empty_symbol,
+            env.ledger().sequence(),
+            platform_fee_bps,
+        );
         events::publish_deploy(&env, symbol_short!("l1155"), &creator, &addr);
         Ok(addr)
     }
@@ -416,18 +431,26 @@ impl Launchpad {
 
     // ── View functions ────────────────────────────────────────────────────
 
-    /// All collections deployed by a specific creator.
     pub fn collections_by_creator(env: Env, creator: Address) -> Vec<CollectionRecord> {
         storage::collections_by_creator(&env, &creator)
     }
 
-    /// Global registry of every collection ever deployed through this launchpad.
     pub fn all_collections(env: Env) -> Vec<CollectionRecord> {
         storage::all_collections(&env)
     }
 
     pub fn collection_count(env: Env) -> u64 {
         storage::collection_count(&env)
+    }
+
+    /// Direct O(1) lookup of a collection by its deployed address (#37).
+    pub fn get_collection(env: Env, address: Address) -> Option<CollectionRecord> {
+        storage::get_collection_by_address(&env, &address)
+    }
+
+    /// Paginated read of the global registry (#37).
+    pub fn get_collections(env: Env, start: u64, limit: u32) -> Vec<CollectionRecord> {
+        storage::get_collections_paginated(&env, start, limit)
     }
 
     pub fn admin(env: Env) -> Address {
