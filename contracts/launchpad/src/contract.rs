@@ -175,6 +175,7 @@ impl Launchpad {
                 &receiver,
                 &(fee as i128),
             );
+            events::publish_deployment_fee_collected(&env, &creator, &receiver, fee as i128, &currency);
         }
 
         let wasm = storage::get_wasm_normal_721(&env).ok_or(Error::WasmHashNotSet)?;
@@ -233,6 +234,7 @@ impl Launchpad {
                 &receiver,
                 &(fee as i128),
             );
+            events::publish_deployment_fee_collected(&env, &creator, &receiver, fee as i128, &currency);
         }
 
         let wasm = storage::get_wasm_normal_1155(&env).ok_or(Error::WasmHashNotSet)?;
@@ -296,6 +298,7 @@ impl Launchpad {
                 &platform_fee_receiver,
                 &(fee as i128),
             );
+            events::publish_deployment_fee_collected(&env, &creator, &receiver, fee as i128, &currency);
         }
 
         let wasm = storage::get_wasm_lazy_721(&env).ok_or(Error::WasmHashNotSet)?;
@@ -358,6 +361,7 @@ impl Launchpad {
                 &platform_fee_receiver,
                 &(fee as i128),
             );
+            events::publish_deployment_fee_collected(&env, &creator, &receiver, fee as i128, &currency);
         }
 
         let wasm = storage::get_wasm_lazy_1155(&env).ok_or(Error::WasmHashNotSet)?;
@@ -406,6 +410,22 @@ impl Launchpad {
         storage::extend_instance_ttl(&env);
         storage::require_admin(&env)?;
         storage::set_platform_fee(&env, &receiver, fee_bps);
+        Ok(())
+    }
+
+    /// Set only the flat deploy fee (in stroops or token smallest unit).
+    pub fn set_deploy_fee(env: Env, fee: u32) -> Result<(), Error> {
+        storage::extend_instance_ttl(&env);
+        storage::require_admin(&env)?;
+        storage::set_deploy_fee_only(&env, fee);
+        Ok(())
+    }
+
+    /// Set only the treasury address that receives deploy fees.
+    pub fn set_treasury(env: Env, treasury: Address) -> Result<(), Error> {
+        storage::extend_instance_ttl(&env);
+        storage::require_admin(&env)?;
+        storage::set_treasury_only(&env, &treasury);
         Ok(())
     }
 

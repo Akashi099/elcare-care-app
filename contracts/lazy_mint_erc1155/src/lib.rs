@@ -21,7 +21,7 @@
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, token::TokenClient,
-    xdr::ToXdr, Address, Bytes, BytesN, Env, String, Symbol, Vec,
+    xdr::ToXdr, Address, Bytes, BytesN, Env, String, Vec,
 };
 
 // ─── Errors ──────────────────────────────────────────────────────────────────
@@ -307,11 +307,7 @@ impl LazyMint1155 {
 
         #[allow(deprecated)]
         env.events().publish(
-            (
-                Symbol::new(&env, "TransferSingle"),
-                buyer.clone(),
-                buyer.clone(),
-            ),
+            (symbol_short!("mint"), creator, buyer.clone()),
             (voucher.token_id, amount),
         );
         Ok(())
@@ -442,11 +438,7 @@ impl LazyMint1155 {
             .extend_ttl(&DataKey::TotalSupply(token_id), 50_000, 100_000);
         #[allow(deprecated)]
         env.events().publish(
-            (
-                Symbol::new(&env, "TransferSingle"),
-                from.clone(),
-                from.clone(),
-            ),
+            (symbol_short!("burn"), from.clone()),
             (token_id, amount),
         );
         Ok(())
@@ -677,12 +669,7 @@ impl LazyMint1155 {
         );
         #[allow(deprecated)]
         env.events().publish(
-            (
-                Symbol::new(env, "TransferSingle"),
-                operator.clone(),
-                from.clone(),
-                to.clone(),
-            ),
+            (symbol_short!("transfer"), from.clone(), to.clone()),
             (token_id, amount),
         );
         Ok(())
@@ -728,7 +715,7 @@ impl LazyMint1155 {
         );
         #[allow(deprecated)]
         env.events().publish(
-            (Symbol::new(env, "TransferSingle"), from.clone(), to.clone()),
+            (symbol_short!("transfer"), from.clone(), to.clone()),
             (token_id, amount),
         );
         Ok(())
