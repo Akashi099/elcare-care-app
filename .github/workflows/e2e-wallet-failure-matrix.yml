@@ -4,19 +4,18 @@ on:
   push:
     paths:
       - 'frontend/elcarehub-app/**'
+      - 'packages/config/**'
       - '.github/workflows/e2e-wallet-failure-matrix.yml'
   pull_request:
     paths:
       - 'frontend/elcarehub-app/**'
+      - 'packages/config/**'
       - '.github/workflows/e2e-wallet-failure-matrix.yml'
 
 jobs:
   wallet-failure-matrix:
     name: Wallet failure matrix (mock chain)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend/elcarehub-app
 
     # No real wallet, RPC, or indexer is ever contacted by this job — the
     # dev server runs with NEXT_PUBLIC_E2E_MOCK_CHAIN=true (see dev:e2e
@@ -29,15 +28,20 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: frontend/elcarehub-app/package-lock.json
+          cache-dependency-path: package-lock.json
 
-      - name: Install dependencies
+      - name: Install all workspace dependencies
         run: npm ci
 
+      - name: Build shared config package
+        run: npm run build --workspace=packages/config
+
       - name: Install Playwright browsers
+        working-directory: frontend/elcarehub-app
         run: npx playwright install --with-deps chromium
 
       - name: Run wallet failure matrix
+        working-directory: frontend/elcarehub-app
         run: npm run test:e2e:wallet-matrix
 
       - name: Upload Playwright report

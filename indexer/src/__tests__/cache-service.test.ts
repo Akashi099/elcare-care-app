@@ -81,11 +81,16 @@ function counterValue(
   counter: { hashMap: Record<string, { value: number }> },
   labels: Record<string, string> = {},
 ): number {
-  const labelKey = Object.entries(labels)
-    .map(([k, v]) => `${k}="${v}"`)
-    .join(',');
-  const entry = counter.hashMap[labelKey] ?? counter.hashMap[''];
-  return entry?.value ?? 0;
+  if (Object.keys(labels).length > 0) {
+    // prom-client v15 hashMap key format: `key:value,` for each label.
+    const labelKey = Object.entries(labels)
+      .map(([k, v]) => `${k}:${v},`)
+      .join('');
+    return counter.hashMap[labelKey]?.value ?? 0;
+  }
+  // No labels requested — sum every labeled series so the delta across a test
+  // reflects the increments made with `.labels(prefix)`.
+  return Object.values(counter.hashMap).reduce((sum, entry) => sum + entry.value, 0);
 }
 
 // ── Setup / teardown ──────────────────────────────────────────────────────────

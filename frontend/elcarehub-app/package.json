@@ -15,6 +15,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:live": "playwright test -c playwright.live.config.ts",
+    "test:e2e:wallet-matrix": "playwright test tests/e2e/wallet-failure-matrix.spec.ts",
     "test:visual": "playwright test tests/e2e/visual-regression.spec.ts",
     "test:visual:update": "playwright test tests/e2e/visual-regression.spec.ts --update-snapshots"
   },

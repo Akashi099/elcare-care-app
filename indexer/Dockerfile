@@ -11,20 +11,20 @@ WORKDIR /build
 RUN apk add --no-cache openssl
 
 # Install dependencies (including devDeps for TypeScript compilation)
-COPY package*.json ./
+COPY indexer/package*.json ./
 RUN npm ci
 
-COPY tsconfig.json ./
-COPY prisma ./prisma/
+COPY indexer/tsconfig.json ./
+COPY indexer/prisma ./prisma/
 
 # Generate Prisma client for the target platform
 RUN npx prisma generate
 
-COPY src ./src/
+COPY indexer/src ./src/
 
 # Copy shared config package (for cross-component validation)
 COPY packages/config ./packages/config
-RUN cd packages/config && npm ci --omit=dev && npm run build
+RUN cd packages/config && npm install --omit=dev && npm run build
 
 # Compile TypeScript with build-time version metadata
 ARG BUILD_SHA=unknown
@@ -55,7 +55,7 @@ RUN apk add --no-cache openssl nodejs npm \
  && adduser  -S appuser -G appgroup
 
 # Install production-only deps
-COPY package*.json ./
+COPY indexer/package*.json ./
 RUN npm ci --omit=dev
 
 # Copy compiled output and Prisma artifacts

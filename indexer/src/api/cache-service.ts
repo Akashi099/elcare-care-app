@@ -230,51 +230,70 @@ export async function getCached<T>(
 ): Promise<T> {
   const prefix = keyPrefix(key);
 
-  // ── 1. Fast path: check Redis cache ──────────────────────────────────────
-  const cached = await redisGet(key);
-  if (cached !== null) {
-    try {
-      return JSON.parse(cached) as T;
-    } catch {
-      // Corrupted cache entry — fall through to origin fetch
-      logger.warn('cache-service.corrupt_entry', { key });
-    }
-  }
-
-  // ── 2. In-process coalescing: join an in-flight fetch if one exists ───────
+  // ── 1. In-process coalescing: join an in-flight fetch if one exists ───────
+  // Checked BEFORE the first await so that callers arriving in the same tick
+  // (before any pending Redis read resolves) still observe the in-flight entry
+  // and coalesce instead of duplicating the origin fetch.
   const existing = inflight.get(key);
   if (existing) {
     cacheCoalescedRequestsTotal.labels(prefix).inc();
     return existing as Promise<T>;
   }
 
-  // ── 3. Distributed lock (optional, multi-instance) ────────────────────────
-  if (opts.distributed && isRedisReady(redis)) {
-    const lockKey = `lock:${key}`;
-    const acquired = await acquireLock(lockKey);
+  // ── 2. Register the fetch pipeline SYNCHRONOUSLY ──────────────────────────
+  // The promise is entered into the inflight map before getCached returns, so
+  // a subsequent synchronous call for the same key always coalesces.  The
+  // pipeline covers the Redis fast path, the optional distributed lock, and
+  // the plain in-process fetch; the finally guarantees the entry is removed on
+  // success, failure, or timeout (cache hits included).
+  const promise = (async (): Promise<T> => {
+    try {
+      // ── Fast path: check Redis cache ──────────────────────────────────────
+      const cached = await redisGet(key);
+      if (cached !== null) {
+        try {
+          return JSON.parse(cached) as T;
+        } catch {
+          // Corrupted cache entry — fall through to origin fetch
+          logger.warn('cache-service.corrupt_entry', { key });
+        }
+      }
 
-    if (!acquired) {
-      // Another instance is filling this key — wait and re-read.
-      cacheLockContentionsTotal.labels(prefix).inc();
-      const waitResult = await waitForCachedValue<T>(key, lockKey, prefix);
-      if (waitResult !== undefined) return waitResult;
-      // Lock wait timed out or value still absent — fall through to our own fetch.
-    } else {
-      cacheLockAcquisitionsTotal.labels(prefix).inc();
-      // We hold the lock — do the fetch and release when done.
-      return runFetch<T>(key, ttl, fetcher, prefix, lockKey);
+      // ── Distributed lock (optional, multi-instance) ───────────────────────
+      if (opts.distributed && isRedisReady(redis)) {
+        const lockKey = `lock:${key}`;
+        const acquired = await acquireLock(lockKey);
+
+        if (!acquired) {
+          // Another instance is filling this key — wait and re-read.
+          cacheLockContentionsTotal.labels(prefix).inc();
+          const waitResult = await waitForCachedValue<T>(key, lockKey, prefix);
+          if (waitResult !== undefined) return waitResult;
+          // Lock wait timed out or value still absent — fall through to our own fetch.
+        } else {
+          cacheLockAcquisitionsTotal.labels(prefix).inc();
+          // We hold the lock — do the fetch and release when done.
+          return runFetch<T>(key, ttl, fetcher, prefix, lockKey);
+        }
+      }
+
+      // ── In-process fetch ──────────────────────────────────────────────────
+      return runFetch<T>(key, ttl, fetcher, prefix, undefined);
+    } finally {
+      // Remove in-flight entry immediately — next caller gets a fresh fetch.
+      inflight.delete(key);
     }
-  }
+  })();
 
-  // ── 4. In-process fetch: register promise, run fetcher ───────────────────
-  return runFetch<T>(key, ttl, fetcher, prefix, undefined);
+  inflight.set(key, promise);
+  return promise;
 }
 
 // ── runFetch ──────────────────────────────────────────────────────────────────
 //
-// Registers the fetch promise in the inflight map, executes the origin fetcher
-// with a timeout, writes successes to Redis, and always removes the inflight
-// entry on completion. Releases the distributed lock on completion if held.
+// Executes the origin fetcher with a timeout, writes successes to Redis.
+// Releases the distributed lock on completion if held.
+// Inflight map is managed by the caller (getCached).
 
 async function runFetch<T>(
   key: string,
@@ -311,8 +330,6 @@ async function runFetch<T>(
       // Re-throw so callers (including coalesced waiters) get the error.
       throw err;
     } finally {
-      // Remove in-flight entry immediately — next caller gets a fresh fetch.
-      inflight.delete(key);
       // Release distributed lock if we hold one.
       if (lockKey) {
         await releaseLock(lockKey);
@@ -320,7 +337,6 @@ async function runFetch<T>(
     }
   })();
 
-  inflight.set(key, promise);
   return promise as Promise<T>;
 }
 

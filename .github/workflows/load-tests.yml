@@ -106,7 +106,7 @@ jobs:
             --build-arg BUILD_SHA=${{ github.sha }} \
             --build-arg BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
             -t elcarehub-indexer-lt:${{ github.sha }} \
-            ./indexer
+            -f indexer/Dockerfile .
 
       - name: Start load-test Docker Compose stack
         run: |
