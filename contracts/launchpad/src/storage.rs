@@ -401,7 +401,9 @@ pub fn update_collection_royalty_defaults(
         .persistent()
         .extend_ttl(&key, TTL_THRESHOLD, TTL_BUMP);
     Ok(())
-}pub fn creator_collection_count(env: &Env, creator: &Address) -> u64 {
+}
+
+pub fn creator_collection_count(env: &Env, creator: &Address) -> u64 {
     env.storage()
         .persistent()
         .get(&DataKey::CreatorCollectionCount(creator.clone()))

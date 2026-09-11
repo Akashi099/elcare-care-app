@@ -1076,7 +1076,7 @@ impl Launchpad {
     /// to keep the registry in sync without redeploying.  Only the contract admin
     /// may call this because the authoritative source of truth is the on-chain
     /// royalty_info() on the collection itself.
-    pub fn update_collection_royalty_defaults(
+    pub fn update_collection_royalties(
         env: Env,
         collection_address: Address,
         royalty_bps: u32,

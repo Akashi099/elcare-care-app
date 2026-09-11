@@ -220,10 +220,10 @@ fn preflight_reports_invalid_fee_bps() {
     assert!(preflight.errors.contains(&(Error::InvalidFeeBps as u32)));
 }
 
-// ── Acceptance criterion 2: duplicate salts rejected ─────────────────────────
+// ── Acceptance criterion 2: duplicate salts resolve idempotently (#477) ─────
 
 #[test]
-fn duplicate_salt_rejected_across_successful_deployments() {
+fn duplicate_salt_returns_existing_deployment_idempotently() {
     let env = Env::default();
     env.ledger().with_mut(|li| li.sequence_number = 1);
     let (client, _admin, _fee_receiver, creator) = setup(&env);
@@ -233,7 +233,7 @@ fn duplicate_salt_rejected_across_successful_deployments() {
     let royalty_receiver = Address::generate(&env);
 
     // First deploy succeeds
-    client.deploy_normal_721(
+    let first = client.deploy_normal_721(
         &creator,
         &currency,
         &String::from_str(&env, "First"),
@@ -245,7 +245,8 @@ fn duplicate_salt_rejected_across_successful_deployments() {
         &salt,
     );
 
-    // Second deploy with identical (creator, salt) must fail with DuplicateSalt
+    // Second deploy with identical (creator, salt) must return the existing
+    // deployment instead of deploying twice (Issue #477).
     let second = client.try_deploy_normal_721(
         &creator,
         &currency,
@@ -257,7 +258,8 @@ fn duplicate_salt_rejected_across_successful_deployments() {
         &0u32,
         &salt,
     );
-    assert_eq!(second, Err(Ok(Error::DuplicateSalt)));
+    assert_eq!(second, Ok(Ok(first)));
+    assert_eq!(client.collection_count(), 1u64);
 }
 
 // ── Acceptance criterion 3: registry is consistent after failed deploys ───────

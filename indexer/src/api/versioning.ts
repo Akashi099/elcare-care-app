@@ -77,11 +77,17 @@ export const ListingResponseV1 = z.object({
   artist: z.string(),
   owner: z.string().nullable(),
   price: z.string(),
+  priceDecimal: z.string(),
   currency: z.string(),
   collection: z.string().nullable(),
+  nftTokenId: z.string(),
+  token: z.string(),
   status: z.string(),
+  recipients: z.unknown().nullable(),
   createdAtLedger: z.number(),
   updatedAtLedger: z.number(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
   // Moderation overlay (Issue #542) — null when no ModerationCase exists for
   // this listing. Never affects the underlying provenance fields above.
   moderationState: z.string().nullable().optional(),

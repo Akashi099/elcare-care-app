@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @elcarehub/config - Centralized, validated configuration for ELCARE-HUB
  *
  * This module provides:
@@ -14,14 +14,12 @@
 
 import { z } from 'zod';
 
-// ── Network configuration ─────────────────────────────────────────────────────
+// â”€â”€ Network configuration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const NetworkEnum = z.enum(['testnet', 'mainnet'], {
-  errorMap: (_issue, _ctx) => ({
-    message:
-      'STELLAR_NETWORK must be "testnet" or "mainnet". ' +
-      'For local development, use testnet and override RPC/Horizon URLs.',
-  }),
+  error:
+    'STELLAR_NETWORK must be "testnet" or "mainnet". ' +
+    'For local development, use testnet and override RPC/Horizon URLs.',
 });
 
 const NetworkPassphraseEnum = z.enum(
@@ -30,12 +28,10 @@ const NetworkPassphraseEnum = z.enum(
     'Public Global Stellar Network ; September 2015',
   ],
   {
-    errorMap: (_issue, _ctx) => ({
-      message:
-        'STELLAR_NETWORK_PASSPHRASE must match the selected network. ' +
-        'Use "Test SDF Network ; September 2015" for testnet, ' +
-        '"Public Global Stellar Network ; September 2015" for mainnet.',
-    }),
+    error:
+      'STELLAR_NETWORK_PASSPHRASE must match the selected network. ' +
+      'Use "Test SDF Network ; September 2015" for testnet, ' +
+      '"Public Global Stellar Network ; September 2015" for mainnet.',
   },
 );
 
@@ -50,7 +46,7 @@ const NetworkConfigSchema = z.object({
   networkPassphrase: NetworkPassphraseEnum,
 });
 
-// ── Contract configuration ────────────────────────────────────────────────────
+// â”€â”€ Contract configuration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const ContractIdSchema = z.string().min(56).max(56).startsWith('C', {
   message:
@@ -62,7 +58,7 @@ const ContractConfigSchema = z.object({
   launchpadContractId: ContractIdSchema.optional(),
 });
 
-// ── Indexer configuration ─────────────────────────────────────────────────────
+// â”€â”€ Indexer configuration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const IndexerUrlSchema = z.string().url({
   message:
@@ -108,7 +104,7 @@ function isValidIp(ip: string): boolean {
   return ipv4Regex.test(ip) || ipv6Regex.test(ip);
 }
 
-// ── Database & Redis configuration ────────────────────────────────────────────
+// â”€â”€ Database & Redis configuration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const DatabaseUrlSchema = z.string().startsWith('postgresql://', {
   message: 'DATABASE_URL must start with "postgresql://" (PostgreSQL connection string).',
@@ -123,7 +119,7 @@ const DatabaseConfigSchema = z.object({
   redisUrl: RedisUrlSchema,
 });
 
-// ── IPFS configuration ────────────────────────────────────────────────────────
+// â”€â”€ IPFS configuration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const PinataGatewaySchema = z.string().url({
   message: 'PINATA_GATEWAY must be a valid URL (e.g., https://gateway.pinata.cloud).',
@@ -138,7 +134,7 @@ const IpfsConfigSchema = z.object({
   pinataJwt: PinataJwtSchema.optional(), // Optional for development
 });
 
-// ── Keeper configuration ──────────────────────────────────────────────────────
+// â”€â”€ Keeper configuration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const KeeperSecretSchema = z.string().min(56).max(56).startsWith('S', {
   message: 'KEEPER_SECRET must be a valid Stellar secret key (56 chars, starts with "S").',
@@ -157,7 +153,7 @@ const KeeperConfigSchema = z.object({
   keeperSubmitTimeoutMs: z.coerce.number().int().positive().default(30000),
 });
 
-// ── Version metadata ──────────────────────────────────────────────────────────
+// â”€â”€ Version metadata â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const VersionConfigSchema = z.object({
   appVersion: z.string().default('0.0.0-dev'),
@@ -166,7 +162,7 @@ const VersionConfigSchema = z.object({
   dbMigrationVersion: z.string().default('20260724000000'),
 });
 
-// ── Cross-component consistency validators ────────────────────────────────────
+// â”€â”€ Cross-component consistency validators â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Validates that network passphrase matches the selected network.
@@ -236,7 +232,7 @@ function validateIndexerUrlConsistency(config: {
   }
 }
 
-// ── Error types ───────────────────────────────────────────────────────────────
+// â”€â”€ Error types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export class ValidationError extends Error {
   constructor(message: string) {
@@ -255,7 +251,7 @@ export class MissingEnvError extends Error {
   }
 }
 
-// ── Configuration loader ──────────────────────────────────────────────────────
+// â”€â”€ Configuration loader â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface Config {
   network: 'testnet' | 'mainnet';
@@ -348,7 +344,7 @@ export function loadConfig(): Config {
   if (!networkResult.success) {
     throw new ValidationError(
       `[NETWORK] Invalid network configuration:\n` +
-      networkResult.error.errors.map((e) => `  - ${e.message}`).join('\n'),
+      networkResult.error.issues.map((e) => `  - ${e.message}`).join('\n'),
     );
   }
 
@@ -361,7 +357,7 @@ export function loadConfig(): Config {
   if (!contractResult.success) {
     throw new ValidationError(
       `[CONTRACT] Invalid contract configuration:\n` +
-      contractResult.error.errors.map((e) => `  - ${e.message}`).join('\n'),
+      contractResult.error.issues.map((e) => `  - ${e.message}`).join('\n'),
     );
   }
 
@@ -375,7 +371,7 @@ export function loadConfig(): Config {
   if (!indexerResult.success) {
     throw new ValidationError(
       `[INDEXER] Invalid indexer configuration:\n` +
-      indexerResult.error.errors.map((e) => `  - ${e.message}`).join('\n'),
+      indexerResult.error.issues.map((e) => `  - ${e.message}`).join('\n'),
     );
   }
 
@@ -388,7 +384,7 @@ export function loadConfig(): Config {
   if (!databaseResult.success) {
     throw new ValidationError(
       `[DATABASE] Invalid database configuration:\n` +
-      databaseResult.error.errors.map((e) => `  - ${e.message}`).join('\n'),
+      databaseResult.error.issues.map((e) => `  - ${e.message}`).join('\n'),
     );
   }
 
@@ -401,7 +397,7 @@ export function loadConfig(): Config {
   if (!ipfsResult.success) {
     throw new ValidationError(
       `[IPFS] Invalid IPFS configuration:\n` +
-      ipfsResult.error.errors.map((e) => `  - ${e.message}`).join('\n'),
+      ipfsResult.error.issues.map((e) => `  - ${e.message}`).join('\n'),
     );
   }
 
@@ -422,7 +418,7 @@ export function loadConfig(): Config {
   if (!keeperResult.success) {
     throw new ValidationError(
       `[KEEPER] Invalid keeper configuration:\n` +
-      keeperResult.error.errors.map((e) => `  - ${e.message}`).join('\n'),
+      keeperResult.error.issues.map((e) => `  - ${e.message}`).join('\n'),
     );
   }
 
@@ -437,7 +433,7 @@ export function loadConfig(): Config {
   if (!versionResult.success) {
     throw new ValidationError(
       `[VERSION] Invalid version configuration:\n` +
-      versionResult.error.errors.map((e) => `  - ${e.message}`).join('\n'),
+      versionResult.error.issues.map((e) => `  - ${e.message}`).join('\n'),
     );
   }
 
@@ -499,7 +495,7 @@ export function loadConfig(): Config {
   };
 }
 
-// ── Type inference helper ─────────────────────────────────────────────────────
+// â”€â”€ Type inference helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /** Returns a subset of config keys for a given component */
 export type ComponentConfig = 'network' | 'contracts' | 'indexer' | 'database' | 'ipfs' | 'keeper' | 'version';

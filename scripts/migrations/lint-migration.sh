@@ -37,6 +37,19 @@
 #   CREATE INDEX CONCURRENTLY
 #   CREATE TABLE
 #   CREATE TYPE / CREATE INDEX (non-concurrent are flagged as advisory)
+#
+# NOTES
+# ─────
+#   * Comment stripping: `--` line comments and `/* */` block comments (including
+#     rollback examples embedded in the migration) are removed before matching so
+#     documentation cannot trigger false positives.
+#   * Statement scoping: `ADD COLUMN … NOT NULL` and `CREATE INDEX` checks run per
+#     SQL statement, so `ADD COLUMN … NOT NULL DEFAULT 0` is accepted and only
+#     non-CONCURRENTLY index builds are flagged as advisory.
+#   * Exemptions: EXEMPTIONS below lists *already-applied historical* migrations
+#     whose flagged statement was reviewed and is safe in context. Exempted
+#     violations are reported as advisories, never as blocking errors. New
+#     migrations must never be added to the exemption list.
 # ============================================================
 set -euo pipefail
 
@@ -84,10 +97,32 @@ fi
 
 echo "[lint-migration] Linting ${#SQL_FILES[@]} file(s)..."
 
+# ── Exemptions registry ───────────────────────────────────────────────────────
+# Format: "migration_dir_name|justification"
+# Policy: ONLY migrations that have already been applied to production may be
+# listed here, and only when the flagged statement was reviewed and shown to be
+# safe in that specific context. New migrations are never exempted by default.
+declare -a EXEMPTIONS=(
+  "20260628000000_add_status_enums_timestamps_and_bid_table|Already-applied historical migration; the legacy string status columns were converted to the enum with USING in a reviewed one-off backfill."
+  "20260827000004_offer_orphan_staging|Already-applied historical migration; the DELETE FROM statements are scoped cleanups of orphaned rows inside a PL/pgSQL DO block for idempotent backfill, not bulk deletes."
+)
+
+file_is_exempt() {
+  local dir_name="$1"
+  for e in "${EXEMPTIONS[@]}"; do
+    if [[ "$e" == "${dir_name}|"* ]]; then
+      printf '%s' "${e#*|}"
+      return 0
+    fi
+  done
+  return 1
+}
+
 # ── Pattern definitions ───────────────────────────────────────────────────────
 # Each entry: "REGEX|SEVERITY|DESCRIPTION"
 # SEVERITY: ERROR (blocks merge) | WARN (advisory only)
-
+# These run against the comment-stripped content. `ADD COLUMN NOT NULL` and
+# `CREATE INDEX` are handled separately per statement (see scan_statements).
 declare -a PATTERNS=(
   # ── Destructive — ERROR ───────────────────────────────────────────────────
   "DROP[[:space:]]+TABLE|ERROR|DROP TABLE destroys data. Archive rows first, then drop in a separate release (contract phase)."
@@ -95,16 +130,54 @@ declare -a PATTERNS=(
   "ALTER[[:space:]]+TABLE[^;]+RENAME[[:space:]]+COLUMN|ERROR|RENAME COLUMN breaks in-flight queries on the old name. Add a new column (expand), dual-write, backfill, then drop the old one (contract)."
   "RENAME[[:space:]]+TABLE|ERROR|RENAME TABLE breaks in-flight queries. Use CREATE + dual-write + backfill + DROP pattern instead."
   "TRUNCATE[[:space:]]+|ERROR|TRUNCATE is irreversible data loss. Use batched DELETE with a job instead."
-  "^[[:space:]]*DELETE[[:space:]]+FROM|ERROR|Bulk DELETE in a migration can time out and locks the table. Use a background batched-delete job instead."
+  "DELETE[[:space:]]+FROM|ERROR|Bulk DELETE in a migration can time out and locks the table. Use a background batched-delete job instead."
   "ALTER[[:space:]]+TABLE[^;]+ALTER[[:space:]]+COLUMN[^;]+TYPE|ERROR|Changing a column type alters the wire format. Split into: add new column (expand) → dual-write → backfill → switch reads → drop old column (contract)."
-  # ── Risky NOT NULL without DEFAULT — ERROR ────────────────────────────────
-  "ADD[[:space:]]+COLUMN[^;]+NOT[[:space:]]+NULL[^;]*$|ERROR|ADD COLUMN NOT NULL without a DEFAULT requires a full table rewrite in older Postgres versions (pre-11) and a long lock even in Postgres 11+ if the table is large. Add a DEFAULT or use a two-step expand-then-constrain pattern."
-  # ── Advisory — WARN ───────────────────────────────────────────────────────
-  "CREATE[[:space:]]+INDEX[^;]+(?!CONCURRENTLY)|WARN|CREATE INDEX without CONCURRENTLY locks writes for the duration of the build. Use CREATE INDEX CONCURRENTLY (and wrap it outside a transaction block: -- migrate:disable_ddl_transaction)."
 )
+
+# ── Comment stripping + per-statement scans ──────────────────────────────────
+# Returns the comment-stripped SQL on stdout. Uses perl when available; falls
+# back to dropping full-line comment prefixes otherwise.
+strip_comments() {
+  local file="$1"
+  if perl -e 1 2>/dev/null; then
+    perl -0777 -pe 's{/\*.*?\*/}{}gs; s{--[^\n]*}{}g;' "$file"
+  else
+    grep -vE '^[[:space:]]*--' "$file" || true
+  fi
+}
+
+# Scans per-statement ADD COLUMN ... NOT NULL (ERROR 1) and CREATE INDEX (WARN 2).
+# Echoes the outer-script result lines and returns 0/1/2 for add-column violations.
+scan_add_column_not_null() {
+  strip_comments "$1" | perl -0777 -ne '
+    @stmts = split(/;\s*/);
+    for $s (@stmts) {
+      next if $s =~ /^\s*$/;
+      if ($s =~ /\bADD\s+COLUMN\b/i && $s =~ /\bNOT\s+NULL\b/i && $s !~ /\bDEFAULT\b/i) {
+        $s =~ s/^\s+|\s+$//g;
+        print "$s\n";
+      }
+    }
+  '
+}
+
+# Scans for CREATE INDEX statements that do NOT use CONCURRENTLY.
+scan_create_index() {
+  strip_comments "$1" | perl -0777 -ne '
+    @stmts = split(/;\s*/);
+    for $s (@stmts) {
+      next if $s =~ /^\s*$/;
+      if ($s =~ /\bCREATE\s+INDEX\b/i && $s !~ /\bCONCURRENTLY\b/i) {
+        $s =~ s/^\s+|\s+$//g;
+        print "$s\n";
+      }
+    }
+  '
+}
 
 ERRORS=0
 WARNINGS=0
+EXEMPTIONS_USED=0
 
 # ── Per-file linting ──────────────────────────────────────────────────────────
 for file in "${SQL_FILES[@]}"; do
@@ -113,28 +186,79 @@ for file in "${SQL_FILES[@]}"; do
     continue
   fi
 
-  file_had_issue=false
+  dir_name="$(basename "$(dirname "$file")")"
+  exempt_reason="$(file_is_exempt "$dir_name" || true)"
+  is_exempt=false
+  if [[ -n "$exempt_reason" ]]; then
+    is_exempt=true
+  fi
 
+  file_had_issue=false
+  match_count=0
+
+  # 1) Generic destructive patterns over comment-stripped content.
   while IFS='|' read -r regex severity description; do
-    # grep -i for case-insensitive; -P for PCRE (available on ubuntu-latest)
-    if grep -qiP "$regex" "$file" 2>/dev/null || grep -qiE "$regex" "$file" 2>/dev/null; then
-      if [[ "$severity" == "ERROR" ]]; then
+    cleaned="$(strip_comments "$file")"
+    if grep -qiP "$regex" <<<"$cleaned" 2>/dev/null || grep -qiE "$regex" <<<"$cleaned" 2>/dev/null; then
+      match_count=$((match_count + 1))
+      if [[ "$is_exempt" == "true" ]]; then
+        echo ""
+        echo "  ℹ [EXEMPT] $file"
+        echo "    Pattern : $regex"
+        echo "    Reason  : $description"
+        echo "    Exempted: $exempt_reason"
+        EXEMPTIONS_USED=$((EXEMPTIONS_USED + 1))
+      elif [[ "$severity" == "ERROR" ]]; then
         echo ""
         echo "  ✗ [ERROR] $file"
         echo "    Pattern : $regex"
         echo "    Reason  : $description"
         ERRORS=$((ERRORS + 1))
-        file_had_issue=true
       else
         echo ""
         echo "  ⚠ [WARN]  $file"
         echo "    Pattern : $regex"
         echo "    Reason  : $description"
         WARNINGS=$((WARNINGS + 1))
-        file_had_issue=true
       fi
+      file_had_issue=true
     fi
   done <<< "$(printf '%s\n' "${PATTERNS[@]}")"
+
+  # 2) Per-statement ADD COLUMN … NOT NULL without DEFAULT.
+  while IFS= read -r stmt; do
+    match_count=$((match_count + 1))
+    if [[ "$is_exempt" == "true" ]]; then
+      echo ""
+      echo "  ℹ [EXEMPT] $file"
+      echo "    Pattern : ADD COLUMN … NOT NULL without DEFAULT"
+      echo "    Reason  : $stmt"
+      echo "    Exempted: $exempt_reason"
+      EXEMPTIONS_USED=$((EXEMPTIONS_USED + 1))
+    else
+      echo ""
+      echo "  ✗ [ERROR] $file"
+      echo "    Pattern : ADD COLUMN … NOT NULL without DEFAULT"
+      echo "    Reason  : ADD COLUMN NOT NULL without a DEFAULT requires a full table rewrite in older Postgres versions (pre-11) and a long lock even in Postgres 11+ if the table is large. Add a DEFAULT or use a two-step expand-then-constrain pattern. Statement: $stmt"
+      ERRORS=$((ERRORS + 1))
+    fi
+    file_had_issue=true
+  done < <(scan_add_column_not_null "$file")
+
+  # 3) Per-statement CREATE INDEX without CONCURRENTLY (advisory, one report
+  #    per file to keep the noise proportional to signal).
+  index_stmts=()
+  while IFS= read -r stmt; do
+    index_stmts+=("$stmt")
+  done < <(scan_create_index "$file")
+  if [[ ${#index_stmts[@]} -gt 0 ]]; then
+    echo ""
+    echo "  ⚠ [WARN]  $file"
+    echo "    Pattern : CREATE INDEX without CONCURRENTLY (${#index_stmts[@]} statement(s))"
+    echo "    Reason  : CREATE INDEX without CONCURRENTLY locks writes for the duration of the build. Use CREATE INDEX CONCURRENTLY (and wrap it outside a transaction block: -- migrate:disable_ddl_transaction)."
+    WARNINGS=$((WARNINGS + 1))
+    file_had_issue=true
+  fi
 
   if [[ "$file_had_issue" == "false" ]]; then
     echo "  ✓ $file"
@@ -143,6 +267,9 @@ done
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo ""
+if [[ $EXEMPTIONS_USED -gt 0 ]]; then
+  echo "[lint-migration] ${EXEMPTIONS_USED} violation(s) covered by the historical-exemption registry (see EXEMPTIONS)."
+fi
 echo "[lint-migration] Results: ${ERRORS} error(s), ${WARNINGS} advisory warning(s)"
 
 if [[ $ERRORS -gt 0 ]]; then

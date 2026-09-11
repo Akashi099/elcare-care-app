@@ -335,8 +335,6 @@ model Collection {
   @@index([creator])
   @@index([creator, deployedAtLedger])
   @@index([kind, deployedAtLedger])
-  @@index([defaultRoyaltyReceiver])
-  @@index([originalCreator])
 }
 
 // ── Lazy-mint voucher registry ────────────────────────────────────────────────

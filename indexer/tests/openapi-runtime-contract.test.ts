@@ -605,7 +605,7 @@ describe('GET /listings/:id/history — contract', () => {
   beforeEach(() => { vi.clearAllMocks(); app = buildApp(); });
 
   const historyContract = z.object({
-    events: z.array(marketplaceEventContract),
+    events: z.array(marketplaceEventContract.extend({ id: z.string() })),
     total:  z.number().int(),
   });
 
@@ -794,16 +794,23 @@ describe('GET /events — SSE handshake', () => {
   beforeEach(() => { vi.clearAllMocks(); app = buildApp(); });
 
   it('responds with text/event-stream content-type', async () => {
-    const res = await request(app)
-      .get('/events')
-      .set('Accept', 'text/event-stream')
-      .buffer(false)
-      .timeout({ response: 300 })
-      .catch((e) => e.response ?? e);
+    const server = app.listen(0);
+    const address = server.address();
+    if (address === null || typeof address === 'string') {
+      server.close();
+      throw new Error('Expected an ephemeral TCP port');
+    }
 
-    // Either got a proper response or timeout — the key is Content-Type
-    if (res && res.headers) {
-      expect(res.headers['content-type']).toContain('text/event-stream');
+    let response: Response | null = null;
+    try {
+      response = await fetch(`http://127.0.0.1:${address.port}/events`, {
+        headers: { Accept: 'text/event-stream' },
+        signal: AbortSignal.timeout(2000),
+      });
+      expect(response.headers.get('content-type')).toContain('text/event-stream');
+    } finally {
+      response?.body?.cancel();
+      server.close();
     }
   });
 

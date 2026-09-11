@@ -25,10 +25,13 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: indexer/package-lock.json
+          cache-dependency-path: package-lock.json
 
+      # npm workspaces monorepo: install at the repo root so workspace links
+      # (@elcarehub/config, @elcarehub/contract-abi) are available to indexer.
       - name: Install dependencies
         run: npm ci
+        working-directory: .
 
       - name: Generate Prisma client
         run: npx prisma generate

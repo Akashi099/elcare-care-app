@@ -195,6 +195,39 @@ pub fn publish_collection_upgraded(
     );
 }
 
+/// Emitted when a deployment for the same (creator, salt) pair already exists
+/// and the caller is returned the existing address idempotently (Issue #477).
+///
+/// Topics: ("dep_idem",)
+/// Data:   (creator: Address, deployed_address: Address)
+#[allow(deprecated)]
+pub fn publish_deploy_idempotent(env: &Env, creator: &Address, address: &Address) {
+    env.events()
+        .publish((symbol_short!("dep_idem"),), (creator.clone(), address.clone()));
+}
+
+/// Emitted when a collection is paused by its creator or admin (Issue #478).
+///
+/// Topics: ("c_psd", collection_address)
+/// Data:   (paused_by: Address)
+#[allow(deprecated)]
+pub fn publish_collection_paused(env: &Env, collection: &Address, paused_by: &Address) {
+    env.events()
+        .publish((symbol_short!("c_psd"), collection.clone()), paused_by.clone());
+}
+
+/// Emitted when a collection is unpaused by its creator or admin (Issue #478).
+///
+/// Topics: ("c_unpsd", collection_address)
+/// Data:   (unpaused_by: Address)
+#[allow(deprecated)]
+pub fn publish_collection_unpaused(env: &Env, collection: &Address, unpaused_by: &Address) {
+    env.events().publish(
+        (symbol_short!("c_unpsd"), collection.clone()),
+        unpaused_by.clone(),
+    );
+}
+
 /// Emitted when a versioned migration completes successfully.
 ///
 /// Topics: ("migrated", version: String)

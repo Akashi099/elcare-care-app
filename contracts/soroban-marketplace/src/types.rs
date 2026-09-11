@@ -215,6 +215,9 @@ pub enum MarketplaceError {
     /// `counter_offer` was called on an offer that is not in Pending state,
     /// or `accept_counter_offer` was called on a non-counter-offer ID. (Issue #471)
     NotCounterOffer = 74,
+    /// A lifecycle transition that is not in the allowed transition matrix was
+    /// attempted (formal listing/auction/offer state machine, Issue #426).
+    InvalidStateTransition = 75,
 }
 
 /// One pending or completed royalty claim for a single recipient.

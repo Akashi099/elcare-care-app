@@ -17,7 +17,6 @@ import {
 import { badRequest, notFound, internalError } from './errors.js';
 import {
   versioningMiddleware,
-  ok,
   validateResponse,
   ListingResponseV1,
   AuctionResponseV1,
@@ -461,6 +460,12 @@ router.get('/listings', lightRateLimiter, cacheMiddleware(TTL.LISTINGS_LIST), qu
         : { gt: cursor_ledger };
     }
 
+    // Opaque composite cursor takes precedence over the legacy cursor_ledger.
+    const decoded = resolveCursor((req as any).validatedQuery, CursorEndpoint.LISTINGS);
+    if (decoded) {
+      Object.assign(where, buildCursorWhere(decoded, direction, 'updatedAtLedger'));
+    }
+
     const take = limit ?? 20;
     const skip = decoded ? 0 : (offset ?? 0);
 
@@ -581,10 +586,10 @@ router.get('/listings', lightRateLimiter, cacheMiddleware(TTL.LISTINGS_LIST), qu
         listings: serialize(withModeration),
         total: Number(total),
       });
-      return ok(res, validatedResp);
+      return res.json(validatedResp);
     }
     const validatedResp = validateResponse(ListingResponseV1.array(), serialize(withModeration));
-    return ok(res, validatedResp);
+    return res.json(validatedResp);
   } catch (err) {
     if ((err as any)?.code === 'BAD_REQUEST') return next(err);
     next(internalError('Failed to fetch listings'));

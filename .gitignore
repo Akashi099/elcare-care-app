@@ -49,6 +49,9 @@ Thumbs.db
 **/__snapshots__/
 **/issues.md
 
+# Windows reserved device name phantom entry (cannot be deleted on NTFS)
+/con
+
 # Loose helper / one-off scripts at repo root
 update_parser.js
 update_events.js

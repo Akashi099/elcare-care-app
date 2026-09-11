@@ -74,6 +74,12 @@ pub enum Error {
     SymbolTooLong = 23,
     /// max_supply is zero or exceeds the platform cap (Issue #476).
     InvalidMaxSupply = 24,
+    /// accept_creator() called when no succession proposal is pending (#484).
+    NoPendingCreator = 25,
+    /// accept_creator() called by an address that is not the proposed successor (#484).
+    NotPendingCreator = 26,
+    /// accept_creator() called after the pending proposal's expiry ledger (#484).
+    ProposalExpired = 27,
 }
 
 // ─── Storage Keys ─────────────────────────────────────────────────────────────

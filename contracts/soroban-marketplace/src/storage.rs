@@ -306,6 +306,10 @@ pub enum DataKey {
     /// (Issue #474). Stores the last listing-id and offer-id processed so the
     /// sweep can be interrupted and resumed safely.
     TerminalCleanupCursor,
+    /// Claim marker for an auction-losing-bid refund (Issue #466). Written
+    /// before the refund transfer so duplicate `refund_losing_bid` claims
+    /// cannot replay a payout; cleared version lives for the offer TTL.
+    BidRefundRecord(u64, Address),
 }
 
 /// Custody record for an NFT held by the marketplace, keyed by
@@ -1679,6 +1683,31 @@ pub fn load_auction_bids(env: &Env, auction_id: u64) -> soroban_sdk::Vec<BidReco
         bump_entry_ttl(env, &key);
     }
     value
+}
+
+/// Records that `bidder` has claimed their losing-bid refund for this auction
+/// (Issue #466). Written before the transfer so replay is impossible.
+pub fn mark_bid_refunded(env: &Env, auction_id: u64, bidder: &Address) {
+    let key = DataKey::BidRefundRecord(auction_id, bidder.clone());
+    env.storage().persistent().set(&key, &true);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, LEDGER_TTL_THRESHOLD, OFFER_TTL_LEDGERS);
+}
+
+/// Returns `true` when `bidder` has already claimed their refund for this
+/// auction (Issue #466). Used for idempotency checks in `refund_losing_bid`.
+pub fn is_bid_refunded(env: &Env, auction_id: u64, bidder: &Address) -> bool {
+    let key = DataKey::BidRefundRecord(auction_id, bidder.clone());
+    let claimed = env
+        .storage()
+        .persistent()
+        .get::<DataKey, bool>(&key)
+        .unwrap_or(false);
+    if claimed {
+        bump_entry_ttl(env, &key);
+    }
+    claimed
 }
 
 // ── Blocked bidders (Issue #199) ─────────────────────────────

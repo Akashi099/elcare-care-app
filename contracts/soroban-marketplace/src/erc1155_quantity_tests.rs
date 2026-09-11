@@ -1,4 +1,4 @@
-/// Issue #479 — ERC-1155 partial-quantity settlement tests.
+﻿/// Issue #479 â€” ERC-1155 partial-quantity settlement tests.
 ///
 /// These tests verify that listings with `quantity > 1` (ERC-1155 multi-
 /// edition) flow correctly through creation, settlement, cancellation, and
@@ -14,14 +14,14 @@ use soroban_sdk::{
     vec, Address, Env,
 };
 
-// ── Mock ERC-1155 collection ──────────────────────────────────────────────────
+// â”€â”€ Mock ERC-1155 collection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 //
 // Supports the three entry points the marketplace calls:
-//   • transfer_from   — used by escrow_nft to pull token into custody
-//   • batch_transfer_from — used by release_nft_with_quantity on buy/cancel
-//   • owner_of        — ownership check during escrow
-//   • royalty_info    — royalty receiver + bps
-//   • contract_type   — returns "ERC1155" so quantity > 1 is accepted
+//   â€¢ transfer_from   â€” used by escrow_nft to pull token into custody
+//   â€¢ batch_transfer_from â€” used by release_nft_with_quantity on buy/cancel
+//   â€¢ owner_of        â€” ownership check during escrow
+//   â€¢ royalty_info    â€” royalty receiver + bps
+//   â€¢ contract_type   â€” returns "ERC1155" so quantity > 1 is accepted
 mod mock_erc1155 {
     use soroban_sdk::{
         contract, contractimpl, Address, Bytes, Env, Symbol, Vec,
@@ -120,9 +120,9 @@ mod mock_erc1155 {
 }
 use mock_erc1155::MockErc1155Client;
 
-// ── Shared test setup ─────────────────────────────────────────────────────────
+// â”€â”€ Shared test setup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-fn setup_1155() -> (Env, MarketplaceContractClient<'static>, Address, Address, Address, Address) {
+fn setup_1155() -> (Env, MarketplaceContractClient<'static>, Address, Address, Address, Address, Address) {
     let env = Env::default();
     env.mock_all_auths();
     let contract_id = env.register(MarketplaceContract, ());
@@ -137,7 +137,7 @@ fn setup_1155() -> (Env, MarketplaceContractClient<'static>, Address, Address, A
         .address();
     StellarAssetClient::new(&env, &payment_token).mint(&buyer, &1_000_000_000_i128);
     StellarAssetClient::new(&env, &payment_token).mint(&artist, &1_000_000_000_i128);
-    StellarAssetClient::new(&env, &contract_id).mint(&contract_id, &1_000_000_000_i128);
+    StellarAssetClient::new(&env, &payment_token).mint(&contract_id, &1_000_000_000_i128);
 
     // ERC-1155 collection
     let collection = env.register(mock_erc1155::MockErc1155, ());
@@ -146,7 +146,7 @@ fn setup_1155() -> (Env, MarketplaceContractClient<'static>, Address, Address, A
     client.set_admin(&admin);
     client.add_token_to_whitelist(&admin, &payment_token);
 
-    (env, client, artist, buyer, payment_token, collection)
+    (env, client, admin, artist, buyer, payment_token, collection)
 }
 
 fn recipients(env: &Env, artist: &Address) -> soroban_sdk::Vec<Recipient> {
@@ -159,11 +159,11 @@ fn recipients(env: &Env, artist: &Address) -> soroban_sdk::Vec<Recipient> {
     ]
 }
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
+// â”€â”€ Tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[test]
 fn erc1155_listing_with_quantity_gt_one_is_created_active() {
-    let (env, client, artist, _buyer, token, collection) = setup_1155();
+    let (env, client, _admin, artist, _buyer, token, collection) = setup_1155();
 
     let id = client.create_listing(
         &artist,
@@ -184,7 +184,7 @@ fn erc1155_listing_with_quantity_gt_one_is_created_active() {
 
 #[test]
 fn erc1155_buy_full_quantity_marks_listing_sold() {
-    let (env, client, artist, buyer, token, collection) = setup_1155();
+    let (env, client, _admin, artist, buyer, token, collection) = setup_1155();
 
     let id = client.create_listing(
         &artist,
@@ -205,7 +205,7 @@ fn erc1155_buy_full_quantity_marks_listing_sold() {
 
 #[test]
 fn erc1155_cancel_listing_with_quantity_marks_cancelled() {
-    let (env, client, artist, _buyer, token, collection) = setup_1155();
+    let (env, client, _admin, artist, _buyer, token, collection) = setup_1155();
 
     let id = client.create_listing(
         &artist,
@@ -227,9 +227,9 @@ fn erc1155_cancel_listing_with_quantity_marks_cancelled() {
 #[test]
 #[should_panic(expected = "Error(Contract")]
 fn erc1155_buy_already_sold_listing_panics() {
-    let (env, client, artist, buyer, token, collection) = setup_1155();
+    let (env, client, _admin, artist, buyer, token, collection) = setup_1155();
 
-    // Second buyer — needs funds too (already minted in setup_1155 for buyer)
+    // Second buyer â€” needs funds too (already minted in setup_1155 for buyer)
     let buyer2 = buyer.clone();
 
     let id = client.create_listing(
@@ -251,7 +251,7 @@ fn erc1155_buy_already_sold_listing_panics() {
 
 #[test]
 fn erc1155_royalty_applied_on_quantity_sale() {
-    let (env, client, artist, buyer, token, collection) = setup_1155();
+    let (env, client, admin, artist, buyer, token, collection) = setup_1155();
 
     // Configure royalty on the collection
     let royalty_receiver = Address::generate(&env);
@@ -259,15 +259,15 @@ fn erc1155_royalty_applied_on_quantity_sale() {
 
     // Protocol treasury
     let treasury = Address::generate(&env);
-    client.set_treasury(&artist, &treasury);
-    client.set_protocol_fee(&artist, &200u32); // 2%
+    client.set_treasury(&admin, &treasury);
+    client.set_protocol_fee(&admin, &200u32); // 2%
 
     let price = 1_000_000_i128;
     let rcps = vec![
         &env,
         Recipient {
             address: artist.clone(),
-            percentage: 7_800, // 78% — leaves room for royalty (5%) + fee (2%)
+            percentage: 7_800, // 78% â€” leaves room for royalty (5%) + fee (2%)
         },
     ];
 
@@ -297,7 +297,7 @@ fn erc1155_royalty_applied_on_quantity_sale() {
 
 #[test]
 fn erc1155_listing_quantity_stored_in_record() {
-    let (env, client, artist, _buyer, token, collection) = setup_1155();
+    let (env, client, _admin, artist, _buyer, token, collection) = setup_1155();
     let qty = 42u64;
 
     let id = client.create_listing(

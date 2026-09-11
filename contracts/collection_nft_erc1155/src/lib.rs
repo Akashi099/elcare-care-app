@@ -77,6 +77,12 @@ pub enum Error {
     EmptyName = 22,
     /// Collection name exceeds maximum length (Issue #476).
     NameTooLong = 23,
+    /// accept_creator() called when no succession proposal is pending (#484).
+    NoPendingCreator = 24,
+    /// accept_creator() called by an address that is not the proposed successor (#484).
+    NotPendingCreator = 25,
+    /// accept_creator() called after the pending proposal's expiry ledger (#484).
+    ProposalExpired = 26,
 }
 
 // ─── Storage Keys ─────────────────────────────────────────────────────────────

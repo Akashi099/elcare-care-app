@@ -124,6 +124,7 @@ const MARKETPLACE_ERRORS: ContractErrorDefinition[] = [
   { code: 72, name: "GovernanceProposalCancelled", message: "This governance proposal has been cancelled.", retryable: false, action: "refresh_and_retry" },
   { code: 73, name: "GovernanceSignerNotAuthorized", message: "Your address is not authorised to approve this governance proposal.", retryable: false, action: "reconnect_wallet" },
   { code: 74, name: "NotCounterOffer", message: "This operation requires a counter-offer, but the referenced offer is not one.", retryable: false, action: "refresh_and_retry" },
+  { code: 75, name: "InvalidStateTransition", message: "This state transition is not allowed by the listing/auction/offer lifecycle.", retryable: false, action: "refresh_and_retry" },
 ];
 
 const LAUNCHPAD_ERRORS: ContractErrorDefinition[] = [
@@ -174,6 +175,9 @@ const COLLECTION_NFT_ERC721_ERRORS: ContractErrorDefinition[] = [
   { code: 22, name: "EmptySymbol", message: "The collection symbol cannot be empty.", retryable: false, action: "adjust_input" },
   { code: 23, name: "SymbolTooLong", message: "The collection symbol exceeds the maximum allowed length of 16 characters.", retryable: false, action: "adjust_input" },
   { code: 24, name: "InvalidMaxSupply", message: "Max supply must be greater than zero and cannot exceed 1,000,000,000.", retryable: false, action: "adjust_input" },
+  { code: 25, name: "NoPendingCreator", message: "There is no pending creator-succession proposal to accept or cancel.", retryable: false, action: "refresh_and_retry" },
+  { code: 26, name: "NotPendingCreator", message: "You are not the proposed successor for this creator transfer.", retryable: false, action: "reconnect_wallet" },
+  { code: 27, name: "ProposalExpired", message: "The creator-succession proposal has expired and must be re-issued.", retryable: false, action: "refresh_and_retry" },
 ];
 
 const COLLECTION_NFT_ERC1155_ERRORS: ContractErrorDefinition[] = [
@@ -200,6 +204,9 @@ const COLLECTION_NFT_ERC1155_ERRORS: ContractErrorDefinition[] = [
   { code: 21, name: "ApprovalExpired", message: "This approval has expired. Please request a new one.", retryable: false, action: "refresh_and_retry" },
   { code: 22, name: "EmptyName", message: "The collection name cannot be empty.", retryable: false, action: "adjust_input" },
   { code: 23, name: "NameTooLong", message: "The collection name exceeds the maximum allowed length of 64 characters.", retryable: false, action: "adjust_input" },
+  { code: 24, name: "NoPendingCreator", message: "There is no pending creator-succession proposal to accept or cancel.", retryable: false, action: "refresh_and_retry" },
+  { code: 25, name: "NotPendingCreator", message: "You are not the proposed successor for this creator transfer.", retryable: false, action: "reconnect_wallet" },
+  { code: 26, name: "ProposalExpired", message: "The creator-succession proposal has expired and must be re-issued.", retryable: false, action: "refresh_and_retry" },
 ];
 
 const LAZY_MINT_ERC721_ERRORS: ContractErrorDefinition[] = [
@@ -228,6 +235,11 @@ const LAZY_MINT_ERC721_ERRORS: ContractErrorDefinition[] = [
   { code: 23, name: "EmptySymbol", message: "The collection symbol cannot be empty.", retryable: false, action: "adjust_input" },
   { code: 24, name: "SymbolTooLong", message: "The collection symbol exceeds the maximum allowed length of 16 characters.", retryable: false, action: "adjust_input" },
   { code: 25, name: "InvalidMaxSupply", message: "Max supply must be greater than zero and cannot exceed 1,000,000,000.", retryable: false, action: "adjust_input" },
+  { code: 26, name: "NoPendingCreator", message: "There is no pending creator-succession proposal to accept or cancel.", retryable: false, action: "refresh_and_retry" },
+  { code: 27, name: "NotPendingCreator", message: "You are not the proposed successor for this creator transfer.", retryable: false, action: "reconnect_wallet" },
+  { code: 28, name: "ProposalExpired", message: "The creator-succession proposal has expired and must be re-issued.", retryable: false, action: "refresh_and_retry" },
+  { code: 29, name: "EmptyUri", message: "The voucher URI is empty; a non-empty URI is required.", retryable: false, action: "adjust_input" },
+  { code: 30, name: "UriTooLong", message: "The voucher URI exceeds the maximum allowed length.", retryable: false, action: "adjust_input" },
 ];
 
 const LAZY_MINT_ERC1155_ERRORS: ContractErrorDefinition[] = [
@@ -259,6 +271,9 @@ const LAZY_MINT_ERC1155_ERRORS: ContractErrorDefinition[] = [
   { code: 26, name: "InvalidBps", message: "The royalty basis-points value is invalid.", retryable: false, action: "adjust_input" },
   { code: 27, name: "EmptyName", message: "The collection name cannot be empty.", retryable: false, action: "adjust_input" },
   { code: 28, name: "NameTooLong", message: "The collection name exceeds the maximum allowed length of 64 characters.", retryable: false, action: "adjust_input" },
+  { code: 29, name: "NoPendingCreator", message: "There is no pending creator-succession proposal to accept or cancel.", retryable: false, action: "refresh_and_retry" },
+  { code: 30, name: "NotPendingCreator", message: "You are not the proposed successor for this creator transfer.", retryable: false, action: "reconnect_wallet" },
+  { code: 31, name: "ProposalExpired", message: "The creator-succession proposal has expired and must be re-issued.", retryable: false, action: "refresh_and_retry" },
 ];
 
 export const CONTRACT_ERROR_CATALOG: Record<ContractName, ContractErrorDefinition[]> = {

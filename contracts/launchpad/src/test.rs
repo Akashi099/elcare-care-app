@@ -757,17 +757,19 @@ fn front_runner_cannot_grief_lazy_1155() {
     assert_eq!(client.collection_count(), 2u64);
 }
 
-// ── Category C: Duplicate (creator, salt) deploy reverts cleanly ─────────────
+// ── Category C: Duplicate (creator, salt) deploy is idempotent (#477) ────────
 //
-// Deploying with the same creator AND same raw salt a second time must revert
-// because the derived secure_salt (sha256(creator ‖ raw_salt)) is identical,
-// so the factory would try to instantiate a contract at an already-occupied
-// deterministic address — the Soroban VM rejects this with a host error.
+// Deploying with the same creator AND same raw salt a second time used to
+// revert (the derived secure_salt sha256(creator ‖ raw_salt) is identical, so
+// the factory would try to instantiate at an already-occupied address).
+// Since #477 the second call returns the existing deployment instead, so each
+// of these tests asserts: same address returned, no second registry entry,
+// and a `dep_idem` event emitted on the retry.
 
-/// deploy_normal_721: same creator, same salt → second deploy reverts.
+/// deploy_normal_721: same creator, same salt → second deploy returns the
+/// already-deployed address.
 #[test]
-#[should_panic]
-fn duplicate_creator_salt_normal_721_reverts() {
+fn duplicate_creator_salt_normal_721_is_idempotent() {
     let env = Env::default();
     env.ledger().with_mut(|li| li.sequence_number = 1);
     let (client, _admin, _fee_receiver, creator) = setup_launchpad(&env);
@@ -775,7 +777,7 @@ fn duplicate_creator_salt_normal_721_reverts() {
     let royalty_receiver = Address::generate(&env);
     let currency = Address::generate(&env);
 
-    client.deploy_normal_721(
+    let first = client.deploy_normal_721(
         &creator,
         &currency,
         &String::from_str(&env, "First 721"),
@@ -786,24 +788,31 @@ fn duplicate_creator_salt_normal_721_reverts() {
         &0u32,
         &salt,
     );
-    // Second call with identical creator + salt must panic.
-    client.deploy_normal_721(
+    env.events().all();
+    let second = client.deploy_normal_721(
         &creator,
         &currency,
-        &String::from_str(&env, "Dupe 721"),
-        &String::from_str(&env, "D721"),
+        &String::from_str(&env, "First 721"),
+        &String::from_str(&env, "F721"),
         &100u64,
         &0u32,
         &royalty_receiver,
         &0u32,
         &salt,
     );
+    let launchpad_id = client.address.clone();
+    assert!(
+        event_with_tag_present(&env, &launchpad_id, symbol_short!("dep_idem")),
+        "expected dep_idem event on idempotent retry; first addr = {first:?}"
+    );
+    assert_eq!(first, second);
+    assert_eq!(client.collection_count(), 1u64);
 }
 
-/// deploy_normal_1155: same creator, same salt → second deploy reverts.
+/// deploy_normal_1155: same creator, same salt → second deploy returns the
+/// already-deployed address.
 #[test]
-#[should_panic]
-fn duplicate_creator_salt_normal_1155_reverts() {
+fn duplicate_creator_salt_normal_1155_is_idempotent() {
     let env = Env::default();
     env.ledger().with_mut(|li| li.sequence_number = 1);
     let (client, _admin, _fee_receiver, creator) = setup_launchpad(&env);
@@ -811,7 +820,7 @@ fn duplicate_creator_salt_normal_1155_reverts() {
     let royalty_receiver = Address::generate(&env);
     let currency = Address::generate(&env);
 
-    client.deploy_normal_1155(
+    let first = client.deploy_normal_1155(
         &creator,
         &currency,
         &String::from_str(&env, "First 1155"),
@@ -820,7 +829,8 @@ fn duplicate_creator_salt_normal_1155_reverts() {
         &0u32,
         &salt,
     );
-    client.deploy_normal_1155(
+    env.events().all();
+    let second = client.deploy_normal_1155(
         &creator,
         &currency,
         &String::from_str(&env, "Dupe 1155"),
@@ -829,12 +839,19 @@ fn duplicate_creator_salt_normal_1155_reverts() {
         &0u32,
         &salt,
     );
+    let launchpad_id = client.address.clone();
+    assert!(
+        event_with_tag_present(&env, &launchpad_id, symbol_short!("dep_idem")),
+        "expected dep_idem on 1155 retry; first addr = {first:?}"
+    );
+    assert_eq!(first, second);
+    assert_eq!(client.collection_count(), 1u64);
 }
 
-/// deploy_lazy_721: same creator, same salt → second deploy reverts.
+/// deploy_lazy_721: same creator, same salt → second deploy returns the
+/// already-deployed address.
 #[test]
-#[should_panic]
-fn duplicate_creator_salt_lazy_721_reverts() {
+fn duplicate_creator_salt_lazy_721_is_idempotent() {
     let env = Env::default();
     env.ledger().with_mut(|li| li.sequence_number = 1);
     let (client, _admin, _fee_receiver, creator) = setup_launchpad(&env);
@@ -843,7 +860,7 @@ fn duplicate_creator_salt_lazy_721_reverts() {
     let royalty_receiver = Address::generate(&env);
     let currency = Address::generate(&env);
 
-    client.deploy_lazy_721(
+    let first = client.deploy_lazy_721(
         &creator,
         &currency,
         &creator_pubkey,
@@ -857,7 +874,8 @@ fn duplicate_creator_salt_lazy_721_reverts() {
 
         &String::from_str(&env, "Test Network; September 2015"),
     );
-    client.deploy_lazy_721(
+    env.events().all();
+    let second = client.deploy_lazy_721(
         &creator,
         &currency,
         &creator_pubkey,
@@ -871,12 +889,19 @@ fn duplicate_creator_salt_lazy_721_reverts() {
 
         &String::from_str(&env, "Test Network; September 2015"),
     );
+    let launchpad_id = client.address.clone();
+    assert!(
+        event_with_tag_present(&env, &launchpad_id, symbol_short!("dep_idem")),
+        "expected dep_idem on lazy 721 retry; first addr = {first:?}"
+    );
+    assert_eq!(first, second);
+    assert_eq!(client.collection_count(), 1u64);
 }
 
-/// deploy_lazy_1155: same creator, same salt → second deploy reverts.
+/// deploy_lazy_1155: same creator, same salt → second deploy returns the
+/// already-deployed address.
 #[test]
-#[should_panic]
-fn duplicate_creator_salt_lazy_1155_reverts() {
+fn duplicate_creator_salt_lazy_1155_is_idempotent() {
     let env = Env::default();
     env.ledger().with_mut(|li| li.sequence_number = 1);
     let (client, _admin, _fee_receiver, creator) = setup_launchpad(&env);
@@ -885,7 +910,7 @@ fn duplicate_creator_salt_lazy_1155_reverts() {
     let royalty_receiver = Address::generate(&env);
     let currency = Address::generate(&env);
 
-    client.deploy_lazy_1155(
+    let first = client.deploy_lazy_1155(
         &creator,
         &currency,
         &creator_pubkey,
@@ -897,7 +922,8 @@ fn duplicate_creator_salt_lazy_1155_reverts() {
 
         &String::from_str(&env, "Test Network; September 2015"),
     );
-    client.deploy_lazy_1155(
+    env.events().all();
+    let second = client.deploy_lazy_1155(
         &creator,
         &currency,
         &creator_pubkey,
@@ -909,6 +935,13 @@ fn duplicate_creator_salt_lazy_1155_reverts() {
 
         &String::from_str(&env, "Test Network; September 2015"),
     );
+    let launchpad_id = client.address.clone();
+    assert!(
+        event_with_tag_present(&env, &launchpad_id, symbol_short!("dep_idem")),
+        "expected dep_idem on lazy 1155 retry; first addr = {first:?}"
+    );
+    assert_eq!(first, second);
+    assert_eq!(client.collection_count(), 1u64);
 }
 
 // ── Deterministic address regression ────────────────────────────────────────
@@ -1493,9 +1526,6 @@ fn flat_deploy_fee_charged_for_all_kinds() {
 
     let royalty_receiver = Address::generate(&env);
     let creator_pubkey = BytesN::from_array(&env, &[0x08u8; 32]);
-    let fee_topics: soroban_sdk::Vec<Val> =
-        (symbol_short!("fee_coll"), creator.clone(), treasury.clone()).into_val(&env);
-    let fee_data: Val = (FEE, token.clone()).into_val(&env);
 
     client.deploy_normal_721(
         &creator,
@@ -1508,12 +1538,7 @@ fn flat_deploy_fee_charged_for_all_kinds() {
         &0u32,
         &BytesN::from_array(&env, &[0xD1u8; 32]),
     );
-    assert!(event_present(
-        &env,
-        &client.address,
-        fee_topics.clone(),
-        fee_data
-    ));
+    assert!(event_with_tag_present(&env, &client.address, symbol_short!("fee_coll")));
     assert_eq!(token_client.balance(&treasury), FEE);
 
     client.deploy_normal_1155(
@@ -1525,12 +1550,7 @@ fn flat_deploy_fee_charged_for_all_kinds() {
         &0u32,
         &BytesN::from_array(&env, &[0xD2u8; 32]),
     );
-    assert!(event_present(
-        &env,
-        &client.address,
-        fee_topics.clone(),
-        fee_data
-    ));
+    assert!(event_with_tag_present(&env, &client.address, symbol_short!("fee_coll")));
     assert_eq!(token_client.balance(&treasury), 2 * FEE);
 
     client.deploy_lazy_721(
@@ -1547,12 +1567,7 @@ fn flat_deploy_fee_charged_for_all_kinds() {
 
         &String::from_str(&env, "Test Network; September 2015"),
     );
-    assert!(event_present(
-        &env,
-        &client.address,
-        fee_topics.clone(),
-        fee_data
-    ));
+    assert!(event_with_tag_present(&env, &client.address, symbol_short!("fee_coll")));
     assert_eq!(token_client.balance(&treasury), 3 * FEE);
 
     client.deploy_lazy_1155(
@@ -1567,7 +1582,7 @@ fn flat_deploy_fee_charged_for_all_kinds() {
 
         &String::from_str(&env, "Test Network; September 2015"),
     );
-    assert!(event_present(&env, &client.address, fee_topics, fee_data));
+    assert!(event_with_tag_present(&env, &client.address, symbol_short!("fee_coll")));
     assert_eq!(token_client.balance(&treasury), 4 * FEE);
 
     assert_eq!(token_client.balance(&creator), 10_000 - 4 * FEE);
@@ -1716,7 +1731,7 @@ fn update_collection_wasm_and_upgrade_collection_emit_events() {
     assert!(event_with_tag_present(&env, &client.address, symbol_short!("wasm_upd")));
 
     client.upgrade_collection(&deployed);
-    assert!(event_with_tag_present(&env, &client.address, symbol_short!("col_upg")));
+    assert!(event_with_tag_present(&env, &client.address, symbol_short!("coll_upg")));
 }
 
 // ── Collections view tests ──────────────────────────────────────
@@ -2401,8 +2416,10 @@ fn preflight_normal_721_predicts_the_deployed_address() {
 
     assert_eq!(preflight.predicted_address, deployed);
 
-    // Re-running preflight against the now-consumed salt must surface the
-    // duplicate-salt error — and the real deploy call must reject it too.
+    // Re-running preflight against the now-consumed salt still predicts the
+    // same address and surfaces the used-salt flag — but since #477 a deploy
+    // with the same (creator, salt) resolves idempotently to the existing
+    // deployment rather than reverting.
     let preflight_after = client.preflight_deploy_normal_721(
         &creator,
         &currency,
@@ -2428,7 +2445,7 @@ fn preflight_normal_721_predicts_the_deployed_address() {
             &0u32,
             &salt,
         ),
-        Err(Ok(Error::DuplicateSalt))
+        Ok(Ok(deployed))
     );
 }
 

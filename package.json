@@ -22,9 +22,10 @@
     "live-e2e:test": "bash -c 'set -a; source scripts/live-e2e/.env.live-e2e; set +a; npm run test:e2e:live --prefix frontend/elcarehub-app'",
     "lint:frontend": "npm run lint --prefix frontend/elcarehub-app",
     "lint:indexer": "npm run lint --prefix indexer",
-    "install:all": "npm ci --prefix frontend/elcarehub-app && npm ci --prefix indexer"
+    "install:all": "npm ci"
   },
   "workspaces": [
+    "packages/config",
     "packages/contract-abi",
     "frontend/elcarehub-app",
     "indexer"

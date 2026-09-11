@@ -114,8 +114,8 @@ export function getAbuseKey(req: Request): AbuseKey {
   }
   // ipKeyGenerator normalizes IPv6 and respects Express's trust-proxy
   // handling of X-Forwarded-For, matching the rate limiter's behavior.
-  const ip = ipKeyGenerator(req);
-  return { keyType: 'ip_hash', key: `ip:${hashIp(ip)}` };
+  const clientIp = req.ip ?? req.socket?.remoteAddress ?? 'unknown';
+  return { keyType: 'ip_hash', key: `ip:${hashIp(ipKeyGenerator(clientIp))}` };
 }
 
 // ── Redis readiness (matches the pattern used elsewhere: redis.ts, cache-middleware.ts) ──

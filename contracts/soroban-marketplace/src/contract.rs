@@ -56,7 +56,7 @@ use crate::{
         load_governance_approvals, save_governance_approvals,
         // Issue #474 — terminal cleanup cursor
         get_terminal_cleanup_cursor, set_terminal_cleanup_cursor,
-        clear_terminal_cleanup_cursor, TerminalCleanupCursor,
+        clear_terminal_cleanup_cursor,
     },
     types::{
         Auction, AuctionCancelReason, AuctionStatus, BatchCreateListingInput,

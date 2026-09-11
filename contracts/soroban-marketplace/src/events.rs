@@ -282,8 +282,6 @@ impl AuctionCancelledEvent {
     pub fn publish(self, env: &Env) {
         env.events().publish((soroban_sdk::Symbol::new(env, AUCTION_CANCELLED),), self);
     }
-}LED),), self);
-    }
 }
 
 /// Emitted when a losing bidder's escrowed funds are returned.
@@ -1841,28 +1839,6 @@ pub const TERMINAL_CLEANED: &str = "terminal_cleaned";
 ///   `id`     — the listing_id or offer_id processed
 ///   `status` — numeric status discriminant as a string (for readability)
 ///   `ledger_sequence` — ledger the cleanup was processed on
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct TerminalCleanedEvent {
-    pub kind: soroban_sdk::Symbol,
-    pub id: u64,
-    pub ledger_sequence: u32,
-}
-
-impl TerminalCleanedEvent {
-    #[allow(deprecated)]
-    pub fn publish(self, env: &Env) {
-        env.events()
-            .publish((soroban_sdk::Symbol::new(env, TERMINAL_CLEANED),), self);
-    }
-}
-
-// ── Terminal-record cleanup event (Issue #474) ───────────────────────────────
-
-pub const TERMINAL_CLEANED: &str = "terminal_cleaned";
-
-/// Emitted once per terminal record processed by `cleanup_terminal_records`
-/// before the contract stops renewing that record's TTL.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TerminalCleanedEvent {

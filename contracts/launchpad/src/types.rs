@@ -167,4 +167,10 @@ pub enum DataKey {
     /// `Admin` while absent so existing single-admin deployments are
     /// unaffected until an operator opts into a separate emergency signer.
     EmergencyPauser,
+    /// Deployed collection address for a consumed secure salt — enables
+    /// idempotent retries of `deploy_*` after a successful deployment (#477).
+    SaltAddress(BytesN<32>),
+    /// Per-collection pause flag — set by either the collection creator or a
+    /// launchpad admin via the emergency pause path (#478).
+    CollectionPaused(Address),
 }

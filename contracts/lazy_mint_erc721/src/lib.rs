@@ -93,6 +93,16 @@ pub enum Error {
     SymbolTooLong = 24,
     /// max_supply is zero or exceeds the platform cap (Issue #476).
     InvalidMaxSupply = 25,
+    /// accept_creator() called when no succession proposal is pending (#484).
+    NoPendingCreator = 26,
+    /// accept_creator() called by an address that is not the proposed successor (#484).
+    NotPendingCreator = 27,
+    /// accept_creator() called after the pending proposal's expiry ledger (#484).
+    ProposalExpired = 28,
+    /// redeem/check_voucher called with an empty URI.
+    EmptyUri = 29,
+    /// redeem/check_voucher called with a URI exceeding MAX_URI_LEN bytes.
+    UriTooLong = 30,
 }
 
 // ─── Data types ───────────────────────────────────────────────────────────────
@@ -732,6 +742,24 @@ impl LazyMint721 {
         env.storage()
             .persistent()
             .has(&DataKey::RevokedVoucher(nonce))
+    }
+
+    /// Returns the composite status of a voucher nonce (#480):
+    ///   "Revoked"  — creator has explicitly revoked this nonce
+    ///   "Redeemed" — nonce has been consumed by a successful redeem call
+    ///   "Issued"   — nonce is still valid (not revoked, not redeemed)
+    ///
+    /// Revocation takes priority in the display string so a race where the
+    /// contract sets both flags is surfaced as "Revoked" (the creator-visible
+    /// terminal state), consistent with the on-chain check order in check_voucher.
+    pub fn voucher_status(env: Env, nonce: u64) -> String {
+        if env.storage().persistent().has(&DataKey::RevokedVoucher(nonce)) {
+            String::from_str(&env, "Revoked")
+        } else if env.storage().persistent().has(&DataKey::UsedVoucher(nonce)) {
+            String::from_str(&env, "Redeemed")
+        } else {
+            String::from_str(&env, "Issued")
+        }
     }
 
     // ── Transfers ─────────────────────────────────────────────────────────
