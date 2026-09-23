@@ -138,6 +138,11 @@ export const creatorCollectionsQuerySchema = z.object({
   ...cursorFields,
 });
 
+export const collectionTokensQuerySchema = z.object({
+  limit:  positiveInt(100).optional(),
+  offset: positiveInt(10_000).optional(),
+});
+
 export const statsQuerySchema = z.object({
   range: z.enum(['day', 'week', 'month']).optional(),
   from:  z.string().optional(),
