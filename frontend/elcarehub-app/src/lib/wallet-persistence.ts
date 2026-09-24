@@ -338,7 +338,10 @@ export function loadWalletState(): LoadedWalletState | null {
     schema = JSON.parse(json);
   } catch (err) {
     devLog('Corrupted wallet state JSON, clearing', err);
+    // Remove the corrupted entry from the active storage AND localStorage so
+    // the same broken bytes are never re-parsed on subsequent page loads.
     safeRemove(SCHEMA_KEY, storage);
+    safeRemove(SCHEMA_KEY, localStorage);
     return null;
   }
 

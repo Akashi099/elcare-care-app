@@ -24,6 +24,9 @@ import type { TokenConfig } from "@/config/tokens";
 /** Maximum i128 value representable on-chain */
 export const MAX_I128 = 170_141_183_460_469_231_731_687_303_715_884_105_727n;
 
+/** Maximum protocol fee in basis points (10_000 bps = 100%) */
+export const MAX_PROTOCOL_FEE_BPS = 10_000;
+
 /** Maximum number of decimal places any supported token can have */
 const MAX_SUPPORTED_DECIMALS = 18;
 
@@ -246,11 +249,24 @@ export function formatAmount(
   const { showSymbol = true, maxFractionDigits, locale = "en-US" } = options;
 
   const decimalStr = baseToDecimalString(base, token.decimals);
-  const num = Number(decimalStr); // safe: only for display, bigint already converted
-
   const fractionDigits =
     maxFractionDigits !== undefined ? maxFractionDigits : token.decimals;
 
+  const [wholePart = "0", fracPart = ""] = decimalStr.split(".");
+
+  // `Intl.NumberFormat` rounds through a JS `Number`, so a whole part beyond
+  // `Number.MAX_SAFE_INTEGER` would silently lose precision. Format the whole
+  // part as a BigInt (exact) and append the fractional digits separately.
+  if (!Number.isSafeInteger(Number(wholePart))) {
+    const groupedWhole = new Intl.NumberFormat(locale, {
+      maximumFractionDigits: 0,
+    }).format(BigInt(wholePart));
+    const frac = fracPart.slice(0, fractionDigits).replace(/0+$/, "");
+    const formatted = frac ? `${groupedWhole}.${frac}` : groupedWhole;
+    return showSymbol ? `${formatted} ${token.symbol}` : formatted;
+  }
+
+  const num = Number(decimalStr);
   const formatted = new Intl.NumberFormat(locale, {
     minimumFractionDigits: 0,
     maximumFractionDigits: fractionDigits,
@@ -320,7 +336,7 @@ export interface FeePreview {
  * user is not surprised by minor discrepancies.
  *
  * @param priceBase       - Listing/bid price in base units
- * @param protocolFeeBps  - Protocol fee in basis points (0–10_000)
+ * @param protocolFeeBps  - Protocol fee in basis points (0–MAX_PROTOCOL_FEE_BPS)
  * @param token           - Payment asset metadata
  */
 export function buildFeePreview(
@@ -328,8 +344,10 @@ export function buildFeePreview(
   protocolFeeBps: number,
   token: TokenConfig
 ): FeePreview {
-  if (protocolFeeBps < 0 || protocolFeeBps > 10_000) {
-    throw new RangeError(`protocolFeeBps must be 0–10_000, got ${protocolFeeBps}`);
+  if (protocolFeeBps < 0 || protocolFeeBps > MAX_PROTOCOL_FEE_BPS) {
+    throw new RangeError(
+      `protocolFeeBps must be 0–${MAX_PROTOCOL_FEE_BPS}, got ${protocolFeeBps}`
+    );
   }
 
   // Integer arithmetic — floor division matching contract behaviour
