@@ -751,7 +751,11 @@ export async function getAuctionBidHistory(
   limit = 20
 ): Promise<BidHistoryPage> {
   const empty: BidHistoryPage = { bids: [], total: 0, hasMore: false };
-  if (!Number.isFinite(auctionId) || auctionId <= 0) return empty;
+  // Auction IDs are 1-indexed in the contract; 0 indicates an uninitialized caller.
+  if (!Number.isFinite(auctionId) || auctionId <= 0) {
+    if (process.env.NODE_ENV === 'development') console.warn('[getAuctionBidHistory] called with auctionId <= 0 — possible initialization ordering bug');
+    return empty;
+  }
 
   const clampedLimit = Math.min(Math.max(1, limit), 100);
   const params = new URLSearchParams({
@@ -1512,6 +1516,6 @@ export async function fetchNextActivityPage(
  * to a composite of event type, listing, ledger sequence and actor.
  */
 export function activityEventKey(event: ActivityFeedEvent): string {
-  if (event.id > 0) return `db:${event.id}`;
+  if (typeof event.id === 'number' && event.id >= 0) return `db:${event.id}`;
   return `sse:${event.eventType}:${event.listingId ?? ""}:${event.ledgerSequence}:${event.actor}`;
 }

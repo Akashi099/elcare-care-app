@@ -97,11 +97,16 @@ test-results/
 # Coverage
 coverage/
 *.lcov
+.nyc_output/
 
 # Temporary files
 *.tmp
 *.bak
 *.orig
+*.log
+
+# Build output
+dist/
 
 # Locally generated SBOMs (scripts/sbom/generate-all.sh) — CI generates and
 # uploads these fresh on every run; local runs are for iteration/debugging.
