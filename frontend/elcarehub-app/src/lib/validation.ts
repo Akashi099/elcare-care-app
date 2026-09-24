@@ -4,11 +4,19 @@
 
 import { StrKey } from "@stellar/stellar-sdk";
 
-/** Format-only fallback: 56-char base32 string starting with G, C, or M. */
+/**
+ * Format-only pre-filter for Stellar addresses.
+ *   G / C  — Ed25519 public key / contract: 56 base32 chars
+ *   M      — Muxed account (SEP-0023):       69 base32 chars
+ */
 function looksLikeStellarAddress(trimmed: string): boolean {
-  if (trimmed.length !== 56) return false;
-  if (!/^[GCM]/.test(trimmed)) return false;
-  return /^[A-Z2-7]{56}$/.test(trimmed);
+  if (trimmed[0] === "M") {
+    return trimmed.length === 69 && /^M[A-Z2-7]{68}$/.test(trimmed);
+  }
+  if (trimmed[0] === "G" || trimmed[0] === "C") {
+    return trimmed.length === 56 && /^[GC][A-Z2-7]{55}$/.test(trimmed);
+  }
+  return false;
 }
 
 /**
@@ -36,7 +44,7 @@ export function isValidStellarAddress(address: string): boolean {
         return StrKey.isValidMed25519PublicKey(trimmed);
       default:
         // Unreachable given looksLikeStellarAddress, but fall back safely.
-        return true;
+        return false;
     }
   } catch {
     return false;
@@ -163,6 +171,9 @@ export function validateCollectionSymbol(symbol: string): string | null {
  * @returns `null` when valid, or a human-readable error string.
  */
 export function validateCollectionMaxSupply(maxSupply: number | string): string | null {
+  if (typeof maxSupply === "string" && !/^\d+$/.test(maxSupply.trim())) {
+    return "Max supply must be a whole number.";
+  }
   const val = typeof maxSupply === "string" ? parseInt(maxSupply, 10) : maxSupply;
   if (!Number.isFinite(val) || val <= 0) {
     return "Max supply must be greater than zero.";
@@ -178,7 +189,7 @@ export function validateCollectionMaxSupply(maxSupply: number | string): string 
  * @returns `null` when valid, or a human-readable error string.
  */
 export function validateCollectionUri(uri: string): string | null {
-  if (!uri || uri.length === 0) {
+  if (!uri || uri.trim().length === 0) {
     return "URI cannot be empty.";
   }
   const byteLen = new TextEncoder().encode(uri).length;
