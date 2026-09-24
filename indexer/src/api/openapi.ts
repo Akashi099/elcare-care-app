@@ -144,6 +144,53 @@ export const RoyaltyBreakdownSchema = registry.register(
   }).openapi('RoyaltyBreakdown'),
 );
 
+export const CollectionStatsSchema = registry.register(
+  'CollectionStats',
+  z.object({
+    activeListings:  z.number().int().openapi({ example: 5, description: 'Active fixed-price listings' }),
+    auctionListings: z.number().int().openapi({ example: 1, description: 'Listings currently in auction status' }),
+    totalSales:      z.number().int().openapi({ example: 12 }),
+    totalVolume:     z.string().openapi({ example: '125000000.0000000', description: 'Cumulative sold volume in raw base units (decimal string)' }),
+    floorPrice:      z.string().nullable().openapi({ example: '10000000.0000000', description: 'Lowest active listing price in raw base units; null when no active listing' }),
+    uniqueOwners:    z.number().int().openapi({ example: 8 }),
+    uniqueTokens:    z.number().int().openapi({ example: 20 }),
+  }).openapi('CollectionStats'),
+);
+
+export const CollectionDetailSchema = registry.register(
+  'CollectionDetail',
+  z.object({
+    collection: CollectionSchema,
+    stats: CollectionStatsSchema,
+    recentActivity: z.array(MarketplaceEventSchema).openapi({ description: 'Latest events involving this collection\'s listings' }),
+  }).openapi('CollectionDetail'),
+);
+
+export const CollectionTokensResponseSchema = registry.register(
+  'CollectionTokens',
+  z.object({
+    tokens: z.array(ListingSchema),
+    total: z.number().int(),
+  }).openapi('CollectionTokens'),
+);
+
+export const TokenDetailSchema = registry.register(
+  'TokenDetail',
+  z.object({
+    collection: CollectionSchema,
+    tokenId: bigIntString,
+    listings: z.array(ListingSchema),
+    currentListing: ListingSchema.nullable(),
+    currentAuction: AuctionSchema.nullable(),
+    activity: z.object({
+      events: z.array(z.record(z.string(), z.unknown())),
+      total: z.number().int(),
+      sales: z.array(z.record(z.string(), z.unknown())),
+    }),
+    royaltiesPaid: z.array(RoyaltyPaymentSchema),
+  }).openapi('TokenDetail'),
+);
+
 export const StatsSchema = registry.register(
   'Stats',
   z.object({
@@ -360,6 +407,59 @@ registry.registerPath({
   request: { params: z.object({ address: z.string().openapi({ description: 'Creator Stellar address' }) }) },
   responses: {
     200: { description: 'Collections by creator', content: { 'application/json': { schema: z.array(CollectionSchema) } } },
+  },
+});
+
+// GET /collections/:address
+registry.registerPath({
+  method: 'get',
+  path: '/collections/{address}',
+  tags: ['Collections'],
+  summary: 'Get collection detail with marketplace stats and recent activity',
+  description: 'Returns the collection metadata plus aggregated marketplace statistics (active listings, sales volume, floor price, unique owners/tokens) and the latest events involving this collection\'s listings. Cached for 60 s.',
+  request: { params: z.object({ address: z.string().openapi({ description: 'Collection contract address' }) }) },
+  responses: {
+    200: { description: 'Collection detail', content: { 'application/json': { schema: CollectionDetailSchema } } },
+    404: { description: 'Collection not found', content: { 'application/json': { schema: ErrorResponseSchema } } },
+  },
+});
+
+// GET /collections/:address/tokens
+registry.registerPath({
+  method: 'get',
+  path: '/collections/{address}/tokens',
+  tags: ['Collections'],
+  summary: 'Get paginated token inventory for a collection',
+  description: 'Returns distinct tokens (by nftTokenId) with a representative listing each (preferring Active/Auction status), ordered by tokenId. Supports offset pagination.',
+  request: {
+    params: z.object({ address: z.string().openapi({ description: 'Collection contract address' }) }),
+    query: z.object({
+      limit: z.coerce.number().int().nonnegative().max(100).optional().openapi({ description: 'Page size (default 20, max 100)' }),
+      offset: z.coerce.number().int().nonnegative().max(10000).optional().openapi({ description: 'Rows to skip' }),
+    }),
+  },
+  responses: {
+    200: { description: 'Token list with total count', content: { 'application/json': { schema: CollectionTokensResponseSchema } } },
+    404: { description: 'Collection not found', content: { 'application/json': { schema: ErrorResponseSchema } } },
+  },
+});
+
+// GET /tokens/:collection/:tokenId
+registry.registerPath({
+  method: 'get',
+  path: '/tokens/{collection}/{tokenId}',
+  tags: ['Tokens'],
+  summary: 'Get token provenance detail',
+  description: 'Returns the collection, all listings/auctions for the token, the current active listing, full event timeline, sale history, and royalty payments.',
+  request: {
+    params: z.object({
+      collection: z.string().openapi({ description: 'Collection contract address' }),
+      tokenId: z.string().openapi({ description: 'NFT token ID' }),
+    }),
+  },
+  responses: {
+    200: { description: 'Token provenance detail', content: { 'application/json': { schema: TokenDetailSchema } } },
+    404: { description: 'Token not found', content: { 'application/json': { schema: ErrorResponseSchema } } },
   },
 });
 

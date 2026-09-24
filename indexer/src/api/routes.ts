@@ -40,6 +40,7 @@ import {
   royaltyBreakdownQuerySchema,
   searchQuerySchema,
   eventsQuerySchema,
+  collectionTokensQuerySchema,
 } from './query-schemas.js';
 import {
   CursorEndpoint,
@@ -1013,6 +1014,113 @@ router.get('/collections', lightRateLimiter, cacheMiddleware(TTL.COLLECTIONS), q
   }
 });
 
+// ── GET /collections/:address ─────────────────────────────────────────────────
+// Collection detail page data: the collection row plus marketplace-derived stats
+// (active listings, volume, floor, unique owners/tokens) and the latest
+// activity for any of its listings.
+
+const COLLECTION_ACTIVITY_LIMIT = 10;
+const COLLECTION_TOKEN_POLL_LIMIT = 200;
+
+async function listListingIdsForCollection(address: string, take = COLLECTION_TOKEN_POLL_LIMIT): Promise<bigint[]> {
+  const rows = await prisma.listing.findMany({
+    where: { collection: address },
+    select: { listingId: true },
+    orderBy: { updatedAtLedger: 'desc' },
+    take,
+  });
+  return rows.map((r) => r.listingId);
+}
+
+async function recentEventsForCollection(address: string, limit = COLLECTION_ACTIVITY_LIMIT) {
+  const ids = await listListingIdsForCollection(address);
+  if (ids.length === 0) return [];
+  return prisma.marketplaceEvent.findMany({
+    where: { listingId: { in: ids } },
+    orderBy: [{ ledgerSequence: 'desc' }, { id: 'desc' }],
+    take: limit,
+  });
+}
+
+router.get('/collections/:address', lightRateLimiter, cacheMiddleware(TTL.COLLECTIONS), queryCostGuard({ isAggregation: true }), async (req: Request, res: Response, next: NextFunction) => {
+  const address = req.params.address as string;
+  if (!isValidStellarAddress(address)) return next(badRequest(STELLAR_ADDRESS_ERROR));
+  try {
+    const collection = await prisma.collection.findUnique({ where: { contractAddress: address } });
+    if (!collection) return next(notFound('Collection not found'));
+
+    const whereCollection = { collection: address } as const;
+    const [activeListings, auctionListings, totalSales, volumeAgg, floorAgg, ownerGroups, tokenGroups, recentActivity] = await Promise.all([
+      prisma.listing.count({ where: { ...whereCollection, status: 'Active' } }),
+      prisma.listing.count({ where: { ...whereCollection, status: 'Auction' } }),
+      prisma.listing.count({ where: { ...whereCollection, status: 'Sold' } }),
+      prisma.listing.aggregate({ _sum: { price: true }, where: { ...whereCollection, status: 'Sold' } }),
+      prisma.listing.aggregate({ _min: { price: true }, where: { ...whereCollection, status: 'Active' } }),
+      prisma.listing.groupBy({ by: ['owner'], where: { ...whereCollection, owner: { not: null } } }),
+      prisma.listing.groupBy({ by: ['nftTokenId'], where: whereCollection }),
+      recentEventsForCollection(address),
+    ]);
+
+    const stats = {
+      activeListings,
+      auctionListings,
+      totalSales,
+      totalVolume: volumeAgg._sum.price?.toString() ?? '0',
+      floorPrice: floorAgg._min.price != null ? floorAgg._min.price.toString() : null,
+      uniqueOwners: ownerGroups.map((g) => g.owner).filter(Boolean).length,
+      uniqueTokens: tokenGroups.length,
+    };
+
+    res.json({
+      collection: serialize(collection),
+      stats,
+      recentActivity: serialize(recentActivity),
+    });
+  } catch (err) {
+    next(internalError('Failed to fetch collection details'));
+  }
+});
+
+// ── GET /collections/:address/tokens ──────────────────────────────────────────
+//
+// Distinct token inventory for a collection, one representative listing per
+// token (preferring an Active/Auction listing, falling back to the most
+// recently updated one). Uses DISTINCT ON so pagination is stable.
+
+router.get('/collections/:address/tokens', lightRateLimiter, queryCostGuard(), validateQuery(collectionTokensQuerySchema), async (req: Request, res: Response, next: NextFunction) => {
+  const address = req.params.address as string;
+  if (!isValidStellarAddress(address)) return next(badRequest(STELLAR_ADDRESS_ERROR));
+  const { limit, offset } = (req as any).validatedQuery;
+  const take = limit ?? 20;
+  const skip = offset ?? 0;
+  try {
+    const [rows, countRows] = await Promise.all([
+      prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+        `SELECT DISTINCT ON ("nftTokenId") *
+         FROM "Listing"
+         WHERE "collection" = $1
+         ORDER BY "nftTokenId",
+                  (CASE "status" WHEN 'Active' THEN 0 WHEN 'Auction' THEN 1 ELSE 2 END) ASC,
+                  "updatedAtLedger" DESC
+         LIMIT ${take} OFFSET ${skip}`,
+        address,
+      ),
+      prisma.$queryRawUnsafe<[{ count: bigint | string }]>(
+        `SELECT COUNT(*) AS count FROM (SELECT DISTINCT "nftTokenId" FROM "Listing" WHERE "collection" = $1) t`,
+        address,
+      ),
+    ]);
+
+    const total = Number(countRows[0]?.count ?? 0n);
+    const withModeration = excludeModerated(await attachModerationState(rows as any[]));
+
+    res.setHeader('X-Total-Count', String(total));
+    res.json({ tokens: serializeListings(withModeration), total });
+  } catch (err) {
+    next(internalError('Failed to fetch collection tokens'));
+  }
+});
+
 // ── GET /collections/:address/fee ─────────────────────────────────────────────
 // Returns the per-collection fee override for a given collection contract
 // address, or null when the collection is using the global default fee.
@@ -1940,6 +2048,95 @@ router.get('/tokens/:address/history', lightRateLimiter, abuseDetection('tx-look
     res.json({ events: serialize(events), total });
   } catch (err) {
     next(internalError('Failed to fetch token history'));
+  }
+});
+
+// ── GET /tokens/:collection/:tokenId ──────────────────────────────────────────
+//
+// Token provenance detail: the collection, every listing/auction that has ever
+// referenced the token, the current active listing (if any), the token's full
+// event timeline (newest-first), its sale history, and royalty payments.
+
+function toTimelineEvent(row: any) {
+  const data = (row.data as Record<string, unknown>) ?? {};
+  const txHash =
+    (typeof data.tx_hash === 'string' && data.tx_hash) ||
+    (typeof data.txHash === 'string' && data.txHash) ||
+    `ledger_${row.ledgerSequence}`;
+  return {
+    id: `evt_${row.id}`,
+    eventType: row.eventType,
+    actor: row.actor,
+    data,
+    ledgerSequence: row.ledgerSequence,
+    ledgerTimestamp: row.ledgerTimestamp instanceof Date ? row.ledgerTimestamp.toISOString() : String(row.ledgerTimestamp ?? ''),
+    confirmed: row.confirmed,
+    txHash,
+    contractId: row.contractId ?? '',
+    eventIndex: row.eventIndex ?? null,
+  };
+}
+
+router.get('/tokens/:collection/:tokenId', lightRateLimiter, cacheMiddleware(TTL.LISTING_DETAIL), queryCostGuard({ hasJoin: true }), async (req: Request, res: Response, next: NextFunction) => {
+  const collectionAddress = req.params.collection as string;
+  const tokenIdRaw = req.params.tokenId as string;
+  if (!isValidStellarAddress(collectionAddress)) return next(badRequest(STELLAR_ADDRESS_ERROR));
+  if (!/^\d+$/.test(tokenIdRaw)) return next(badRequest('tokenId must be a non-negative integer'));
+  const tokenId = BigInt(tokenIdRaw);
+  try {
+    const collection = await prisma.collection.findUnique({ where: { contractAddress: collectionAddress } });
+    if (!collection) return next(notFound('Collection not found'));
+
+    const [listings, auctions] = await Promise.all([
+      prisma.listing.findMany({
+        where: { collection: collectionAddress, nftTokenId: tokenId },
+        orderBy: { updatedAtLedger: 'desc' },
+      }),
+      prisma.auction.findMany({
+        where: { collection: collectionAddress, nftTokenId: tokenId },
+        orderBy: { updatedAtLedger: 'desc' },
+      }),
+    ]);
+
+    if (listings.length === 0 && auctions.length === 0) {
+      return next(notFound('No marketplace activity found for this token'));
+    }
+
+    const listingIds = listings.map((l) => l.listingId);
+    const auctionIds = auctions.map((a) => a.auctionId);
+
+    const withModeration = await attachModerationState(listings as any[]);
+    const currentListing = withModeration.find((l) => l.status === 'Active') ?? null;
+
+    const events = await prisma.marketplaceEvent.findMany({
+      where: { listingId: { in: [...listingIds, ...auctionIds] } },
+      orderBy: [{ ledgerSequence: 'desc' }, { id: 'desc' }],
+    });
+    const timeline = events.map(toTimelineEvent);
+    const sales = timeline.filter((e) => e.eventType === 'ARTWORK_SOLD');
+
+    let royaltiesPaid: any[] = [];
+    if (listingIds.length > 0 || auctionIds.length > 0) {
+      const where: any = { OR: [] };
+      if (listingIds.length) where.OR.push({ listingId: { in: listingIds } });
+      if (auctionIds.length) where.OR.push({ auctionId: { in: auctionIds } });
+      royaltiesPaid = await prisma.royaltyPayment.findMany({
+        where,
+        orderBy: [{ ledgerSequence: 'desc' }, { id: 'desc' }],
+      });
+    }
+
+    res.json({
+      collection: serialize(collection),
+      tokenId: tokenIdRaw,
+      listings: serializeListings(withModeration),
+      currentListing: currentListing ? serializeListing(currentListing) : null,
+      currentAuction: auctions.find((a) => a.status === 'Active') ?? null,
+      activity: { events: timeline, total: timeline.length, sales },
+      royaltiesPaid: serialize(royaltiesPaid),
+    });
+  } catch (err) {
+    next(internalError('Failed to fetch token details'));
   }
 });
 

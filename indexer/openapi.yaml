@@ -308,6 +308,93 @@ components:
         - symbol
         - deployedAtLedger
         - createdAt
+    CollectionStats:
+      type: object
+      properties:
+        activeListings:
+          type: integer
+          example: 5
+          description: Active fixed-price listings
+        auctionListings:
+          type: integer
+          example: 1
+          description: Listings currently in auction status
+        totalSales:
+          type: integer
+          example: 12
+        totalVolume:
+          type: string
+          example: "125000000.0000000"
+          description: Cumulative sold volume in raw base units (decimal string)
+        floorPrice:
+          type: string
+          nullable: true
+          example: "10000000.0000000"
+          description: Lowest active listing price in raw base units; null when no active listing
+        uniqueOwners:
+          type: integer
+          example: 8
+        uniqueTokens:
+          type: integer
+          example: 20
+    CollectionDetail:
+      type: object
+      properties:
+        collection:
+          $ref: "#/components/schemas/Collection"
+        stats:
+          $ref: "#/components/schemas/CollectionStats"
+        recentActivity:
+          type: array
+          items:
+            $ref: "#/components/schemas/MarketplaceEvent"
+          description: Latest events involving this collection's listings
+    CollectionTokens:
+      type: object
+      properties:
+        tokens:
+          type: array
+          items:
+            $ref: "#/components/schemas/Listing"
+        total:
+          type: integer
+    TokenDetail:
+      type: object
+      properties:
+        collection:
+          $ref: "#/components/schemas/Collection"
+        tokenId:
+          type: string
+          example: "123"
+        listings:
+          type: array
+          items:
+            $ref: "#/components/schemas/Listing"
+        currentListing:
+          allOf:
+            - $ref: "#/components/schemas/Listing"
+            - nullable: true
+        currentAuction:
+          allOf:
+            - $ref: "#/components/schemas/Auction"
+            - nullable: true
+        activity:
+          type: object
+          properties:
+            events:
+              type: array
+              items:
+                type: object
+            total:
+              type: integer
+            sales:
+              type: array
+              items:
+                type: object
+        royaltiesPaid:
+          type: array
+          items:
+            $ref: "#/components/schemas/RoyaltyPayment"
     RoyaltyStats:
       type: object
       properties:
@@ -837,6 +924,102 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Collection"
+  /collections/{address}:
+    get:
+      tags:
+        - Collections
+      summary: Get collection detail with marketplace stats and recent activity
+      description: Returns the collection metadata plus aggregated marketplace statistics (active listings, sales volume, floor price, unique owners/tokens) and the latest events involving this collection's listings. Cached for 60 s.
+      parameters:
+        - schema:
+            type: string
+            description: Collection contract address
+          required: true
+          description: Collection contract address
+          name: address
+          in: path
+      responses:
+        "200":
+          description: Collection detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectionDetail"
+        "404":
+          $ref: '#/components/responses/NotFound'
+  /collections/{address}/tokens:
+    get:
+      tags:
+        - Collections
+      summary: Get paginated token inventory for a collection
+      description: Returns distinct tokens (by nftTokenId) with a representative listing each (preferring Active/Auction status), ordered by tokenId. Supports offset pagination.
+      parameters:
+        - schema:
+            type: string
+            description: Collection contract address
+          required: true
+          description: Collection contract address
+          name: address
+          in: path
+        - schema:
+            type: integer
+            minimum: 0
+            maximum: 100
+            default: 20
+            description: Page size (default 20, max 100)
+          required: false
+          description: Page size (default 20, max 100)
+          name: limit
+          in: query
+        - schema:
+            type: integer
+            minimum: 0
+            maximum: 10000
+            default: 0
+            description: Rows to skip
+          required: false
+          description: Rows to skip
+          name: offset
+          in: query
+      responses:
+        "200":
+          description: Token list with total count
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectionTokens"
+        "404":
+          $ref: '#/components/responses/NotFound'
+  /tokens/{collection}/{tokenId}:
+    get:
+      tags:
+        - Tokens
+      summary: Get token provenance detail
+      description: Returns the collection, all listings/auctions for the token, the current active listing, full event timeline, sale history, and royalty payments.
+      parameters:
+        - schema:
+            type: string
+            description: Collection contract address
+          required: true
+          description: Collection contract address
+          name: collection
+          in: path
+        - schema:
+            type: string
+            description: NFT token ID
+          required: true
+          description: NFT token ID
+          name: tokenId
+          in: path
+      responses:
+        "200":
+          description: Token provenance detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenDetail"
+        "404":
+          $ref: '#/components/responses/NotFound'
   /wallets/{address}/activity:
     get:
       tags:
