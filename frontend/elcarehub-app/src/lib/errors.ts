@@ -90,3 +90,26 @@ export function getReadableErrorMessage(
   }
   return fallback;
 }
+
+/**
+ * Structured logger for React error boundaries.
+ *
+ * Call this inside a class component's `componentDidCatch` to produce a
+ * consistent, searchable log entry that includes both the error details and
+ * the React component stack. Using a centralised helper means every error
+ * boundary in the app emits the same shape, making log aggregation and
+ * alerting rules straightforward.
+ *
+ * @param error - The Error object caught by the boundary.
+ * @param info  - The React ErrorInfo object containing `componentStack`.
+ */
+export function onErrorBoundary(
+  error: Error,
+  info: { componentStack: string }
+): void {
+  console.error("[ErrorBoundary]", {
+    error: error.message,
+    stack: error.stack,
+    componentStack: info.componentStack,
+  });
+}
