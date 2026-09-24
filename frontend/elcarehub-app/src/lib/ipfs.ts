@@ -207,10 +207,10 @@ export function validateArtworkMetadata(
       messages.push(
         "Alt text is required for non-decorative images. Describe what the artwork shows, not just its title."
       );
-    } else if (metadata.altText.length > ALT_TEXT_MAX_LENGTH) {
+    } else if (new TextEncoder().encode(metadata.altText).length > ALT_TEXT_MAX_LENGTH) {
       errors.push("ALT_TEXT_TOO_LONG");
       messages.push(
-        `Alt text must be ${ALT_TEXT_MAX_LENGTH} characters or fewer (${metadata.altText.length} given).`
+        `Alt text must be ${ALT_TEXT_MAX_LENGTH} bytes or fewer (${new TextEncoder().encode(metadata.altText).length} bytes given).`
       );
     }
   }

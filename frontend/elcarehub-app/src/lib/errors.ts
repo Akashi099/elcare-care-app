@@ -69,17 +69,47 @@ export function mapSorobanErrorMessage(raw: string): string | null {
   return mapped ? `${mapped} (code ${code})` : null;
 }
 
+/**
+ * Default user-facing fallback message used by `getReadableErrorMessage` and
+ * any UI component that needs a generic error string. Centralised here so
+ * copy changes only need to happen in one place.
+ */
+export const DEFAULT_ERROR_MESSAGE = "Something went wrong. Please try again.";
+
 export function getReadableErrorMessage(
   error: unknown,
-  fallback = "Something went wrong. Please try again."
+  fallback = DEFAULT_ERROR_MESSAGE
 ): string {
   if (error instanceof Error) {
     const mapped = mapSorobanErrorMessage(error.message);
-    return mapped ?? error.message ?? fallback;
+    return mapped ?? (error.message || fallback);
   }
   if (typeof error === "string") {
     const mapped = mapSorobanErrorMessage(error);
     return mapped ?? error;
   }
   return fallback;
+}
+
+/**
+ * Structured logger for React error boundaries.
+ *
+ * Call this inside a class component's `componentDidCatch` to produce a
+ * consistent, searchable log entry that includes both the error details and
+ * the React component stack. Using a centralised helper means every error
+ * boundary in the app emits the same shape, making log aggregation and
+ * alerting rules straightforward.
+ *
+ * @param error - The Error object caught by the boundary.
+ * @param info  - The React ErrorInfo object containing `componentStack`.
+ */
+export function onErrorBoundary(
+  error: Error,
+  info: { componentStack: string }
+): void {
+  console.error("[ErrorBoundary]", {
+    error: error.message,
+    stack: error.stack,
+    componentStack: info.componentStack,
+  });
 }
