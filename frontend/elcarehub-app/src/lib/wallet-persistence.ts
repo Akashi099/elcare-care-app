@@ -358,7 +358,7 @@ export function loadWalletState(): LoadedWalletState | null {
   }
 
   // Check expiration
-  if (typeof schema.expiresAt !== 'number' || Date.now() > schema.expiresAt) {
+  if (!Number.isFinite(schema.expiresAt) || Date.now() > schema.expiresAt) {
     devLog('Wallet state expired, clearing', { expiresAt: schema.expiresAt, now: Date.now() });
     safeRemove(SCHEMA_KEY, storage);
     return null;
@@ -442,7 +442,7 @@ export function clearWalletState(): void {
  * Legacy function for old code. Maps to new API.
  * Deprecated: use saveWalletState() instead.
  */
-export function saveWalletProvider(provider: WalletConnectorId): void {
+export function saveWalletProvider(provider: WalletConnectorId, walletAddress: string): void {
   // Assume chainId = 0 (legacy didn't track network)
   // Assume default TTL (24h for backwards compat)
   const chainId = 0;
@@ -460,7 +460,7 @@ export function saveWalletProvider(provider: WalletConnectorId): void {
   }
 
   // Now persist with new schema
-  saveWalletState('[legacy-address]', provider, chainId, { ttlMs });
+  saveWalletState(walletAddress, provider, chainId, { ttlMs });
 }
 
 /**
