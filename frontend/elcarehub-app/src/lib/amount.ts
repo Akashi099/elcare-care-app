@@ -300,6 +300,9 @@ export function bpsToPercent(bps: number): number {
  * percentToBps(2.5) // 250
  */
 export function percentToBps(percent: number): number {
+  if (percent < 0) {
+    throw new RangeError(`percent must be 0–100, got ${percent}`);
+  }
   return Math.round(percent * 100);
 }
 

@@ -18,18 +18,21 @@
 // }
 // ─────────────────────────────────────────────────────────────
 
-import axios from "axios";
-import { config } from "./config";
+ import axios from "axios";
+ import { config } from "./config";
+ 
+const DEFAULT_ARTWORK_TITLE = "Unknown Artwork";
+const DEFAULT_ARTIST = "Unknown";
 
-/** Artwork metadata stored on IPFS */
-export interface ArtworkMetadata {
-  title: string;
-  description: string;
-  artist: string;
-  /** Must be in the form "ipfs://CID" */
-  image: string;
-  year: string;
-  category: string;
+ /** Artwork metadata stored on IPFS */
+ export interface ArtworkMetadata {
+   title: string;
+   description: string;
+   artist: string;
+   /** Must be in the form "ipfs://CID" */
+   image: string;
+   year: string;
+   category: string;
   // Issue #68: Inclusive artwork metadata and alt-text requirements
   /**
    * Meaningful alt text describing the artwork for screen-reader users.
@@ -338,7 +341,7 @@ export const DEFAULT_FALLBACK_GATEWAYS = [
 /** Normalizes an IPFS URI to a clean CID. Strips `ipfs://` prefix. Passes full HTTP URLs through unchanged. */
 export function normalizeIpfsUri(uri: string): string {
   if (uri.startsWith("http")) return uri;
-  return uri.replace("ipfs://", "").trim();
+  return uri.replace(/^ipfs:\/\//i, "").trim();
 }
 
 /**
@@ -377,9 +380,9 @@ export async function fetchMetadata(
 ): Promise<ArtworkMetadata> {
   if (!cid) {
     return {
-      title: "Unknown Artwork",
-      description: "",
-      artist: "Unknown",
+      title: DEFAULT_ARTWORK_TITLE,
+       description: "",
+       artist: DEFAULT_ARTIST,
       image: "",
       year: "",
       category: "",
@@ -480,7 +483,10 @@ export async function verifyImageUpload(
   expectedHash: string,
   signal?: AbortSignal
 ): Promise<void> {
-  if (!expectedHash) return; // hashing unsupported in this environment — skip
+   if (!expectedHash) {
+    console.warn("Image verification skipped: expectedHash not provided (hashing unsupported in this environment)");
+    return; // hashing unsupported in this environment — skip
+  }
   let actualHash: string;
   try {
     actualHash = await fetchContentHash(cid, signal);
