@@ -110,17 +110,19 @@ export function formatRelativeTime(
   const diffMin = Math.round(diffSec / 60);
   const diffHr = Math.round(diffMin / 60);
   const diffDay = Math.round(diffHr / 24);
-  const diffMonth = Math.round(diffDay / 30);
-  const diffYear = Math.round(diffMonth / 12);
+  // Using average days for more accurate month/year calculations
+  const diffMonth = Math.round(diffDay / 30.4375);
+  const diffYear = Math.round(diffDay / 365.25);
 
   const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
 
-  if (Math.abs(diffSec) < 60) return rtf.format(diffSec, "second");
-  if (Math.abs(diffMin) < 60) return rtf.format(diffMin, "minute");
-  if (Math.abs(diffHr) < 24) return rtf.format(diffHr, "hour");
-  if (Math.abs(diffDay) < 30) return rtf.format(diffDay, "day");
-  if (Math.abs(diffMonth) < 12) return rtf.format(diffMonth, "month");
-  return rtf.format(diffYear, "year");
+  // Prioritize larger units to ensure "last year" instead of "12 months ago"
+  if (Math.abs(diffYear) >= 1) return rtf.format(diffYear, "year");
+  if (Math.abs(diffMonth) >= 1) return rtf.format(diffMonth, "month");
+  if (Math.abs(diffDay) >= 1) return rtf.format(diffDay, "day");
+  if (Math.abs(diffHr) >= 1) return rtf.format(diffHr, "hour");
+  if (Math.abs(diffMin) >= 1) return rtf.format(diffMin, "minute");
+  return rtf.format(diffSec, "second");
 }
 
 // ── Asset amount display ──────────────────────────────────────────────────────
@@ -171,6 +173,9 @@ export function formatNumber(
   value: number,
   opts: NumberFormatOptions = {}
 ): string {
+  if (!Number.isFinite(value)) {
+    return "---"; // Guard against NaN or Infinity input
+  }
   const {
     locale = "en-US",
     maximumFractionDigits = 2,

@@ -23,6 +23,8 @@ import type { TokenConfig } from "@/config/tokens";
 
 /** Maximum i128 value representable on-chain */
 export const MAX_I128 = 170_141_183_460_469_231_731_687_303_715_884_105_727n;
+/** Number of stroops in one XLM (10^7) */
+export const STROOP_PER_XLM = 10_000_000n;
 
 /** Maximum number of decimal places any supported token can have */
 const MAX_SUPPORTED_DECIMALS = 18;
@@ -247,6 +249,9 @@ export function formatAmount(
 
   const decimalStr = baseToDecimalString(base, token.decimals);
   const num = Number(decimalStr); // safe: only for display, bigint already converted
+  if (!Number.isFinite(num)) {
+    return "---"; // Guard against very large numbers becoming Infinity
+  }
 
   const fractionDigits =
     maxFractionDigits !== undefined ? maxFractionDigits : token.decimals;
@@ -268,6 +273,9 @@ export function formatAmount(
  * bpsToPercent(250) // 2.5
  */
 export function bpsToPercent(bps: number): number {
+  if (!Number.isFinite(bps) || bps < 0 || bps > 10_000) {
+    throw new RangeError("bps must be a finite number between 0 and 10,000 (inclusive).");
+  }
   return bps / 100;
 }
 
