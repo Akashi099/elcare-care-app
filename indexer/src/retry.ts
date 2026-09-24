@@ -30,6 +30,9 @@ import {
   type TimeoutBudget,
 } from './timeout.js';
 
+/** Jitter is capped at this multiple of baseDelayMs to bound randomness. */
+const MAX_JITTER_MULTIPLIER = 2;
+
 // ── Retry config ──────────────────────────────────────────────────────────────
 
 export interface RetryConfig {
@@ -307,7 +310,8 @@ function computeDelay(
   jitterFactor: number,
 ): number {
   const jitter = jitterFactor > 0 ? Math.random() * jitterFactor : 0;
-  return Math.min(baseDelayMs * Math.pow(2, attempt) * (1 + jitter), maxDelayMs);
+  // Cap the exponent at 20 (2^20 * any realistic base far exceeds maxDelayMs) to prevent Infinity.
+  return Math.min(baseDelayMs * Math.pow(2, Math.min(attempt, 20)) * (1 + jitter), maxDelayMs);
 }
 
 /**
@@ -352,7 +356,8 @@ export async function withExponentialBackoff<T>(
     effectiveMaxAttempts = calculateRetryAttempts(remaining, baseDelayMs, maxDelayMs, maxAttempts);
   }
 
-  let lastErr: unknown;
+  // Sentinel so throw always surfaces an Error even if maxAttempts resolves to 0.
+  let lastErr: unknown = new Error('withRetry: no attempts were made');
 
   for (let attempt = 1; attempt <= effectiveMaxAttempts; attempt++) {
     try {
@@ -459,6 +464,9 @@ function selectBreaker(operation: string): CircuitBreaker | undefined {
   if (op.startsWith('ipfs')) {
     return circuitBreakers.ipfs;
   }
+  if (op.startsWith('redis')) {
+    return circuitBreakers.redis;
+  }
   return undefined;
 }
 
@@ -477,7 +485,7 @@ export async function withRetry<T>(fn: () => Promise<T>, options: RetryOptions =
 
   // Convert flat jitterMs to a jitterFactor relative to baseDelayMs.
   // Guard against baseDelayMs === 0 (test usage) to avoid NaN.
-  const jitterFactor = baseDelayMs > 0 ? Math.min(jitterMs / baseDelayMs, 2) : 0;
+  const jitterFactor = baseDelayMs > 0 ? Math.min(jitterMs / baseDelayMs, MAX_JITTER_MULTIPLIER) : 0;
 
   const config: RetryConfig = {
     maxAttempts,
