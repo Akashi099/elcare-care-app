@@ -45,10 +45,14 @@ export function setLocalePreferences(prefs: LocalePreferences): void {
 
 // ── Date / time formatting ────────────────────────────────────────────────────
 
+const VALID_DATE_STYLES = ["full", "long", "medium", "short"] as const;
+
+export type ValidDateFormat = (typeof VALID_DATE_STYLES)[number];
+
 export interface DateFormatOptions {
   locale?: string;
   timeZone?: string;
-  format?: "short" | "medium" | "long" | "full";
+  format?: ValidDateFormat;
   showTime?: boolean;
 }
 
@@ -64,8 +68,13 @@ export function formatDate(
     showTime = false,
   } = opts;
 
+  // Runtime guard: `Intl.DateTimeFormat` throws a RangeError for any
+  // unrecognized dateStyle, so fall back to "medium" for invalid values.
+  const safeFormat: Intl.DateTimeFormatOptions["dateStyle"] =
+    VALID_DATE_STYLES.includes(format) ? format : "medium";
+
   const options: Intl.DateTimeFormatOptions = {
-    dateStyle: format as Intl.DateTimeFormatOptions["dateStyle"],
+    dateStyle: safeFormat,
     timeZone,
   };
   if (showTime) {

@@ -82,7 +82,8 @@ export interface AuditEvent {
 // ── Storage ───────────────────────────────────────────────────
 
 const SESSION_STORAGE_KEY = "elcarehub:audit_log";
-const MAX_EVENTS = 200; // cap to avoid unbounded growth within a session
+// Cap the in-session audit log at 200 entries to limit sessionStorage consumption.
+const MAX_EVENTS = 200;
 
 function loadSessionLog(): AuditEvent[] {
   if (typeof window === "undefined") return [];
@@ -90,6 +91,7 @@ function loadSessionLog(): AuditEvent[] {
     const raw = sessionStorage.getItem(SESSION_STORAGE_KEY);
     return raw ? (JSON.parse(raw) as AuditEvent[]) : [];
   } catch {
+    sessionStorage.removeItem(SESSION_STORAGE_KEY);
     return [];
   }
 }
@@ -217,7 +219,7 @@ export function clearSessionAuditLog(): void {
  */
 export function explorerTxUrl(txHash: string, network: string = "testnet"): string {
   const base =
-    network === "mainnet"
+    network?.toLowerCase() === "mainnet"
       ? "https://stellar.expert/explorer/public/tx"
       : "https://stellar.expert/explorer/testnet/tx";
   return `${base}/${txHash}`;
