@@ -69,9 +69,16 @@ export function mapSorobanErrorMessage(raw: string): string | null {
   return mapped ? `${mapped} (code ${code})` : null;
 }
 
+/**
+ * Default user-facing fallback message used by `getReadableErrorMessage` and
+ * any UI component that needs a generic error string. Centralised here so
+ * copy changes only need to happen in one place.
+ */
+export const DEFAULT_ERROR_MESSAGE = "Something went wrong. Please try again.";
+
 export function getReadableErrorMessage(
   error: unknown,
-  fallback = "Something went wrong. Please try again."
+  fallback = DEFAULT_ERROR_MESSAGE
 ): string {
   if (error instanceof Error) {
     const mapped = mapSorobanErrorMessage(error.message);
