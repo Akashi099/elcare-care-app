@@ -56,9 +56,9 @@ mod erc1155_quantity_tests;
 
 pub use contract::MarketplaceContract;
 pub use types::{
-    AuctionCancelReason, BatchItemError, BidRecord, CancelReason, CollectionStandard,
-    GovernanceProposal, GovernanceProposalType, Listing, ListingStatus, MarketplaceError, Offer,
-    OfferStatus, PauseMatrix, RoleType,
+    Auction, AuctionCancelReason, AuctionStatus, BatchItemError, BidRecord, CancelReason,
+    CollectionStandard, GovernanceProposal, GovernanceProposalType, Listing, ListingStatus,
+    MarketplaceError, Offer, OfferStatus, PauseMatrix, Recipient, RoleType,
 };
 
 #[cfg(any(test, feature = "testutils"))]
