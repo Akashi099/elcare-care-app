@@ -20,6 +20,7 @@ import {
   getLocalePreferences,
   setLocalePreferences,
 } from "@/lib/format";
+import type { ValidDateFormat } from "@/lib/format";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -75,6 +76,22 @@ describe("formatDate", () => {
     const d = new Date("2024-06-01T00:00:00Z");
     const result = formatDate(d, { locale: "en-US", timeZone: "UTC" });
     expect(result).toContain("2024");
+  });
+
+  it("falls back to medium for an unrecognized format value", () => {
+    const bogus = formatDate(MS_2024_01_15, {
+      locale: "en-US",
+      timeZone: "UTC",
+      format: "bogus" as unknown as ValidDateFormat,
+    });
+    const medium = formatDate(MS_2024_01_15, {
+      locale: "en-US",
+      timeZone: "UTC",
+      format: "medium",
+    });
+    expect(bogus).toBe(medium);
+    expect(bogus).toContain("Jan");
+    expect(bogus).toContain("2024");
   });
 });
 
