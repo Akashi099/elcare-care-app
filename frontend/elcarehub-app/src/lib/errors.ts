@@ -92,6 +92,52 @@ export function getReadableErrorMessage(
 }
 
 /**
+ * Returns true when the error represents a network-level failure — i.e. the
+ * request never received an HTTP response (no connectivity, DNS failure, CORS
+ * block, request timeout, etc.). Distinct from `isServerError`, which
+ * indicates the server responded with a 5xx status.
+ *
+ * Only recognises Axios errors. All other values (plain Error, string,
+ * unknown) return false.
+ */
+export function isNetworkError(err: unknown): boolean {
+  return (
+    isAxiosError(err) &&
+    err.response === undefined &&
+    err.request !== undefined
+  );
+}
+
+/**
+ * Returns true when the error is an Axios error with an HTTP response whose
+ * status code is 500 or higher (server-side error). These warrant a "try
+ * again later" UI message, distinct from network errors ("check your
+ * connection") and 4xx client errors (actionable by the user).
+ *
+ * Only recognises Axios errors. All other values return false.
+ */
+export function isServerError(err: unknown): boolean {
+  return isAxiosError(err) && (err.response?.status ?? 0) >= 500;
+}
+
+// ── Internal Axios type guard ─────────────────────────────────
+
+/** Lightweight type guard that identifies Axios errors without importing axios. */
+interface AxiosLikeError {
+  isAxiosError: true;
+  response?: { status: number };
+  request?: unknown;
+}
+
+function isAxiosError(err: unknown): err is AxiosLikeError {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    (err as Record<string, unknown>).isAxiosError === true
+  );
+}
+
+/**
  * Structured logger for React error boundaries.
  *
  * Call this inside a class component's `componentDidCatch` to produce a
