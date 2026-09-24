@@ -93,6 +93,8 @@ export function formatLedgerTime(
 
 // ── Relative time ─────────────────────────────────────────────────────────────
 
+const MS_PER_SECOND = 1_000;
+
 export interface RelativeTimeOptions {
   locale?: string;
 }
@@ -104,7 +106,7 @@ export function formatRelativeTime(
   const { locale = "en-US" } = opts;
   const ts = typeof date === "number" ? date : date.getTime();
   const diffMs = ts - Date.now();
-  const diffSec = Math.round(diffMs / 1000);
+  const diffSec = Math.round(diffMs / MS_PER_SECOND);
   const diffMin = Math.round(diffSec / 60);
   const diffHr = Math.round(diffMin / 60);
   const diffDay = Math.round(diffHr / 24);
@@ -146,8 +148,8 @@ export function formatAssetDisplay(
     maxFractionDigits = 7,
     showSymbol = true,
   } = opts;
-  const num = parseFloat(displayValue);
-  if (!Number.isFinite(num)) {
+  const num = Number(displayValue.trim());
+  if (!Number.isFinite(num) || String(num) !== displayValue.trim()) {
     return showSymbol ? `${displayValue} ${symbol}` : displayValue;
   }
   const formatted = new Intl.NumberFormat(locale, {

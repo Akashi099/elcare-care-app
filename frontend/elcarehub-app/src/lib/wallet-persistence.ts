@@ -40,6 +40,8 @@
 //
 // ─────────────────────────────────────────────────────────────
 
+import { isValidStellarAddress } from "./validation";
+
 // ── Schema & Versioning ───────────────────────────────────────
 
 /**
@@ -258,6 +260,7 @@ export function saveWalletState(
   chainId: number,
   options?: SaveWalletOptions
 ): boolean {
+  if (typeof localStorage === 'undefined') return false;
   if (typeof window === 'undefined') return false;
 
   const ttl = options?.ttlMs ?? DEFAULT_WALLET_TTL_MS;
@@ -314,6 +317,7 @@ export interface LoadedWalletState {
  *   - User disabled "Remember Wallet"
  */
 export function loadWalletState(): LoadedWalletState | null {
+  if (typeof localStorage === 'undefined') return null;
   if (typeof window === 'undefined') return null;
 
   const storage = getActiveStorage();
@@ -361,6 +365,12 @@ export function loadWalletState(): LoadedWalletState | null {
   if (!schema.walletAddress || !schema.connectorId || typeof schema.chainId !== 'number') {
     devLog('Invalid wallet state schema, clearing');
     safeRemove(SCHEMA_KEY, storage);
+    return null;
+  }
+
+  // Validate wallet address format
+  if (!isValidStellarAddress(schema.walletAddress)) {
+    devLog('Invalid wallet address format, rejecting state', { walletAddress: schema.walletAddress });
     return null;
   }
 
