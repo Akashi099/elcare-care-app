@@ -270,12 +270,13 @@ function eventTypeToActivity(
  * Fetches marketplace-related events for a wallet from the ELCARE-HUB indexer.
  */
 export async function getWalletActivity(
-  publicKey: string
+  publicKey: string,
+  limit = 50
 ): Promise<ActivityEvent[]> {
   if (!isNonEmptyString(publicKey)) return [];
   try {
     const raw = await fetchWithRetry<unknown>(
-      `/wallets/${encodeURIComponent(publicKey)}/activity?limit=50`
+      `/wallets/${encodeURIComponent(publicKey)}/activity?limit=${limit}`
     );
     return parseActivityList(raw).map((ev) =>
       mapWalletEventToActivity(ev, publicKey)
@@ -794,12 +795,28 @@ export async function getAuctionBidHistory(
   return empty;
 }
 
+/**
+ * Placeholder bidder for a bid record the indexer returned without a `bidder`.
+ * UI components can compare against this to show a placeholder instead of an
+ * address.
+ */
+export const UNKNOWN_BIDDER = "UNKNOWN";
+
 function parseBidRecords(raw: unknown[]): BidHistoryRecord[] {
   return raw
     .filter((item): item is Record<string, unknown> => item !== null && typeof item === "object")
+    .map((item) => {
+      if (typeof item.bidder !== "string" || item.bidder === "") {
+        console.warn("[parseBidRecords] bid record missing bidder", item);
+      }
+      return item;
+    })
     .map((item) => ({
       ledger: typeof item.ledger === "number" ? item.ledger : 0,
-      bidder: typeof item.bidder === "string" ? item.bidder : "",
+      bidder:
+        typeof item.bidder === "string" && item.bidder !== ""
+          ? item.bidder
+          : UNKNOWN_BIDDER,
       amount: item.amount != null ? String(item.amount) : "0",
       timestamp:
         typeof item.timestamp === "number"
@@ -897,16 +914,27 @@ export function getAuctionBidCountHistogramSnapshot(): {
   };
 }
 
+/** Give up on a histogram snapshot POST after this long (milliseconds). */
+const HISTOGRAM_SHIP_TIMEOUT_MS = 5_000;
+
 async function _shipHistogramSnapshot(indexerUrl: string): Promise<void> {
   if (typeof fetch === "undefined") return; // SSR / non-browser env
   const snapshot = getAuctionBidCountHistogramSnapshot();
-  await fetch(`${indexerUrl}/metrics/histogram`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(snapshot),
-    // keepalive so the request survives page navigation
-    keepalive: true,
-  });
+  try {
+    await fetch(`${indexerUrl}/metrics/histogram`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(snapshot),
+      // keepalive so the request survives page navigation
+      keepalive: true,
+      signal: AbortSignal.timeout(HISTOGRAM_SHIP_TIMEOUT_MS),
+    });
+  } catch (e) {
+    // A timed-out metrics POST is expected when the endpoint is slow; drop it.
+    // AbortSignal.timeout rejects with "TimeoutError" (older engines: "AbortError").
+    if (e instanceof Error && (e.name === "AbortError" || e.name === "TimeoutError")) return;
+    throw e;
+  }
 }
 
 /**
@@ -990,6 +1018,8 @@ export function summariseSSEEvent(event: MarketplaceSSEEvent): string {
       return `Listing #${event.listingId ?? d.listing_id} cancelled`;
     case "LISTING_EXPIRED":
       return `Listing #${event.listingId ?? d.listing_id} expired`;
+    case "LISTING_UPDATED":
+      return `Listing #${event.listingId ?? d.listing_id} updated`;
     case "LISTING_PRICE_UPDATED": {
       const newP = fmtAmount(d.new_price);
       return `Listing #${event.listingId ?? d.listing_id} price updated${newP ? ` to ${newP}` : ""}`;
@@ -1040,6 +1070,19 @@ export function summariseSSEEvent(event: MarketplaceSSEEvent): string {
       return `New ${event.type.replace("DEPLOY_", "").replace("_", " ")} collection deployed`;
     case "ROYALTY_PAID":
       return `Royalties paid for listing #${event.listingId ?? d.listing_id ?? d.auction_id}`;
+    case "ROYALTY_SETTLEMENT": {
+      // Data shape: { id, recipients: [{ address, percentage }], total_amount, token }
+      const amt = fmtAmount(d.total_amount);
+      const recipients = Array.isArray(d.recipients) ? d.recipients : [];
+      const first = recipients[0] as { address?: unknown } | undefined;
+      const to =
+        recipients.length === 1 && typeof first?.address === "string"
+          ? `${first.address.slice(0, 4)}…${first.address.slice(-4)}`
+          : recipients.length > 1
+          ? `${recipients.length} recipients`
+          : "artist";
+      return `Royalty of ${amt || "?"} paid to ${to}`;
+    }
     case "CONTRACT_PAUSED":
       return "Marketplace paused";
     case "CONTRACT_UNPAUSED":
